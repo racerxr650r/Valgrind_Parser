@@ -63,7 +63,7 @@ make uninstall
 Uninstalls the vgp application and documentation.
 
 ## Example
-The following is a sample Valgrind log file.
+The following is a typical sample of a Valgrind log file.
 ```
 ==4061210== Memcheck, a memory error detector
 ==4061210== Copyright (C) 2002-2022, and GNU GPL'd, by Julian Seward et al.

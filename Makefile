@@ -6,16 +6,26 @@
 #    uninstall:	uninstalls the application and documentation
 
 # Build Variables +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# Target executable name
-TARGET = vgp
+# Application target executable name
+APP_TARGET = vgp
+# Test target executable name
+TEST_TARGET = test_vgp
 # Project root directory
 PROJECT_ROOT = $(shell pwd)
 # Source directory
 SRCDIR = $(PROJECT_ROOT)
-# Source files
-SOURCES = $(wildcard $(SRCDIR)/*.c)
-# Object files
-OBJECTS = $(patsubst $(SRCDIR)/%.c,$(BUILD_DIR)/%.o,$(SOURCES))
+# App main source file
+APP_SRC = $(SRCDIR)/main.c
+# App object file
+APP_OBJ = $(patsubst $(SRCDIR)/%.c,$(BUILD_DIR)/%.o,$(APP_SRC))
+# Test main source file
+TEST_SRC = $(SRCDIR)/test_vgp.c
+# Test object file
+TEST_OBJ = $(patsubst $(SRCDIR)/%.c,$(BUILD_DIR)/%.o,$(TEST_SRC))
+# Common source files
+COMMON_SRC = $(filter-out $(APP_SRC) $(TEST_SRC),$(wildcard $(SRCDIR)/*.c))
+# Common object files
+COMMON_OBJS = $(patsubst $(SRCDIR)/%.c,$(BUILD_DIR)/%.o,$(COMMON_SRC))
 # Dependency files
 DEPENDS = $(OBJECTS:.o=.d)
 # Linux usr binaries directory
@@ -29,50 +39,78 @@ SYSDDIR = /etc/systemd/system
 # Udev rules directory
 UDEVDIR = /etc/udev/rules.d
 # C compiler command
-CC =		gcc
+CC = gcc
+# C++ compiler command
+CXX = g++
 # Build flags for c files
 CFLAGS = -g -I/usr/local/include -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wredundant-decls -Wno-long-long -Wno-parentheses -DNCURSES_WIDECHAR=1 -MMD -MP -std=c99
+# Build flags for c files
+CXXFLAGS = -g -I/usr/local/include -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wredundant-decls -Wno-long-long -Wno-parentheses -DNCURSES_WIDECHAR=1 -MMD -MP -std=c++11
 # Debug flags for c files
 DFLAGS = -g3 -fsanitize=address -I/usr/local/include -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wredundant-decls -Wno-long-long -Wno-parentheses -DNCURSES_WIDECHAR=1 -MMD -MP -std=c99
 # Linker Flags
-LDFLAGS = -lncursesw
+LDFLAGS = -L/path/to/cpputest/lib -lCppUTest -lCppUTestExt
+#-lncursesw
 # Application command line options
-OPTIONS =
+OPTIONS = -c -v
 
 # Build Targets +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # Build all target files
-all:		build $(BUILD_DIR)/$(TARGET)
+all:		build $(BUILD_DIR)/$(APP_TARGET)
+
+# Build all test target files
+test:		build $(BUILD_DIR)/$(TEST_TARGET)
+	@echo "Running tests..."
+	$(BUILD_DIR)/$(TEST_TARGET) $(OPTIONS)
+
 # Create the build directory
 build:
 	mkdir -p $(BUILD_DIR)
-# Build the app from the .c source
-$(BUILD_DIR)/$(TARGET): $(OBJECTS)
-	@echo "Linking $(TARGET)..."
+
+# Build the app from the object files
+$(BUILD_DIR)/$(APP_TARGET): $(APP_OBJ) $(COMMON_OBJS)
+	@echo "Linking $(APP_TARGET)..."
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
 # Compile the .c files to .o files in the build directory
 $(BUILD_DIR)/%.o: $(SRCDIR)/%.c
 	@echo "Compiling $<..."
 	$(CC) $(CFLAGS) -c $< -o $@
+
+# Compile the .cpp files to .o files in the build directory
+$(BUILD_DIR)/%.o: $(SRCDIR)/%.cpp
+	@echo "Compiling $<..."
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Build the test app from the object files
+$(BUILD_DIR)/$(TEST_TARGET): $(TEST_OBJ) $(COMMON_OBJS)
+	@echo "Linking $(TEST_TARGET)..."
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
+
 # Build the app with debug symbols
-debug: build $(OBJECTS)
-	@echo "Building $(TARGET) with debug symbols..."
-	$(CC) $(DFLAGS) -o $(BUILD_DIR)/$(TARGET) $(OBJECTS) $(LDFLAGS)
+debug: build $(COMMON_OBJS)
+	@echo "Building $(APP_TARGET) with debug symbols..."
+	$(CC) $(DFLAGS) -o $(BUILD_DIR)/$(APP_TARGET) $(COMMON_OBJS) $(LDFLAGS)
 
 # Run TARGET with the provided command line options
-run:		all
-	$(BUILD_DIR)/$(TARGET) $(OPTIONS)
+run: all
+	$(BUILD_DIR)/$(APP_TARGET) $(OPTIONS)
+
 # Install the application
 install:	all
-	sudo cp $(BUILD_DIR)/$(TARGET) $(BINDIR)
-	sudo cp $(TARGET).1 $(MANDIR)
+	sudo cp $(BUILD_DIR)/$(APP_TARGET) $(BINDIR)
+	sudo cp $(APP_TARGET).1 $(MANDIR)
+
 # Uninstall the application
 uninstall:
-	sudo rm -f $(BINDIR)/$(TARGET)
-	sudo rm -f $(MANDIR)/$(TARGET).1
+	sudo rm -f $(BINDIR)/$(APP_TARGET)
+	sudo rm -f $(MANDIR)/$(APP_TARGET).1
+
 # Install prereqeuisites
 prereqs:
 	sudo apt update
 	sudo apt install libncurses5-dev libncursesw5-dev
+
 # Clean up all generated files
 clean:
 	rm -rf $(BUILD_DIR)

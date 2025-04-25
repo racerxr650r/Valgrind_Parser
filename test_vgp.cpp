@@ -72,10 +72,10 @@ TEST(StripValgrindPidPrefix, HandlesMissingSpaceAfterPrefix)
 {
     // LLR 2.3: If the pattern is not found, return the original line pointer.
     char line[] = "==123==Invalid read";
-    char *expected = line + 7;
+    char *expected = line;
     char *actual = strip_valgrind_pid_prefix(line);
     POINTERS_EQUAL(expected, actual);
-    STRCMP_EQUAL("Invalid read", actual);
+    STRCMP_EQUAL("==123==Invalid read", actual);
 }
 
 // Test case for LLR 2.1/2.2: Different PID length

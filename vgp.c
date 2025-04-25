@@ -83,20 +83,40 @@ bool is_user_code_stack_trace(const char *line)
 // Removes the Valgrind PID prefix from a line.
 char *strip_valgrind_pid_prefix(char *line)
 {
-    if (strncmp(line, "==", 2) == 0)
+    // Locate the first occurrence of "=="
+    char *prefix_end = strstr(line, "==");
+    if(prefix_end == NULL)  
+        return line; // No prefix found, return original line
+    prefix_end += 2; // Move past "=="
+
+    // Skip whitespace after "=="
+    while(isspace((unsigned char)*prefix_end))
+        prefix_end++;
+
+    // Check if the prefix is followed by digits
+    if (isdigit((unsigned char)*prefix_end))
     {
-        char *prefix_end = strstr(line, "== ");
-        if (prefix_end)
-        {
-            return prefix_end + 3;
-        }
-        // Handle variation like ==PID==\n
-        if (line[strlen(line) - 1] == '\n' && strstr(line, "==") == line + strlen(line) - 3)
-        {
-            return "";
-        }
+        // Find the end of the digits
+        while (isdigit((unsigned char)*prefix_end))
+            prefix_end++;
     }
-    return line;
+    else
+        return line; // No digits found, return original line
+
+    // Skip whitespace after digits
+    while(isspace((unsigned char)*prefix_end))
+        prefix_end++;
+
+    // Check for "== " after the digits
+    if (strncmp(prefix_end, "== ", 3) != 0)
+        return line; // No "==" found, return original line
+    prefix_end += 3; // Move past "=="
+
+    // Skip whitespace after "=="
+//    while(isspace((unsigned char)*prefix_end) || *prefix_end == '\n')
+//        prefix_end++;
+
+    return prefix_end; // Return pointer to the start of the message
 }
 
 // Get just the function name and filename

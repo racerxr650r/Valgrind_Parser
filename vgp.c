@@ -31,7 +31,7 @@
 #include "vgp.h"
 
 // --- Configuration ---
-const char *USER_CODE_EXTENSIONS[] = { ".c:", ".cpp:", ".h:", ".hpp:", NULL };
+const char *USER_CODE_EXTENSIONS[] = { ".c", ".cpp", ".h", ".hpp", NULL };
 const char *IGNORE_PATHS[] = { "/usr/", "/lib/", "vg_", NULL };
 const char *ERROR_KEYWORDS[] = {
     "Invalid read", "Invalid write",

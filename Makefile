@@ -45,11 +45,11 @@ CXX = g++
 # Build flags for c files
 CFLAGS = -g -I/usr/local/include -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wredundant-decls -Wno-long-long -Wno-parentheses -DNCURSES_WIDECHAR=1 -MMD -MP -std=c99
 # Build flags for c files
-CXXFLAGS = -g -I/usr/local/include -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wredundant-decls -Wno-long-long -Wno-parentheses -DNCURSES_WIDECHAR=1 -MMD -MP -std=c++11
+CXXFLAGS = -g -I/usr/local/include -I/usr/local/include/CppUTest -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wredundant-decls -Wno-long-long -Wno-parentheses -DNCURSES_WIDECHAR=1 -MMD -MP
 # Debug flags for c files
 DFLAGS = -g3 -fsanitize=address -I/usr/local/include -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wredundant-decls -Wno-long-long -Wno-parentheses -DNCURSES_WIDECHAR=1 -MMD -MP -std=c99
 # Linker Flags
-LDFLAGS = -L/path/to/cpputest/lib -lCppUTest -lCppUTestExt
+LDFLAGS = -L/usr/local/lib -lCppUTest -lCppUTestExt
 #-lncursesw
 # Application command line options
 OPTIONS = -c -v

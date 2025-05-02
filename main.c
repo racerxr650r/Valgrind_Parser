@@ -26,10 +26,12 @@
 // --- Main Entry Point ---
 int main(int argc, char *argv[])
 {
+    setlocale(LC_NUMERIC, "");
+    
     if (argc != 2)
     {
-        printf("Usage: %s <valgrind_log_file>\n", argv[0]);
-        printf("Parses a Valgrind log and shows the call stack and source code for the functions with errors.\n");
+        printF("Usage: %s <valgrind_log_file>\n", argv[0]);
+        printF("Parses a Valgrind log and shows the call stack and source code for the functions with errors.\n");
         return EXIT_FAILURE;
     }
 
@@ -42,12 +44,12 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    printf("--- Valgrind Log Summary ---\n");
-    printf("Parsing Log File: %s\n", filename);
+    printF("--- Valgrind Log Summary ---\n");
+    printF("Parsing Log File: %s\n", filename);
 
     process_log_file(file); // Call the main processing function
 
     fclose(file);
-    printf("\n--- End of Summary ---\n");
+    printF("\n--- End of Summary ---\n");
     return EXIT_SUCCESS;
 }

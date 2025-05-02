@@ -39,8 +39,9 @@ This document details the low-level requirements for each function within the `v
 
 **4. `get_function_name(const char *line, char *newline)`**
 
-*   **LLR 4.1:** Parse the input stack trace `line` to extract the function name or source location information. (HLR 3.2, HLR 4.1)
+*   **LLR 4.1:** Parse the input stack trace `line` to extract the function name, file name, and source line information. (HLR 3.2, HLR 4.1)
 *   **LLR 4.2:** Format the extracted information into the `newline` buffer, suitable for display in the simplified stack trace. (HLR 8.1)
+*   **LLR 4.2.1:** Format the extracted information into string organized as follows `function_name(file_name:source_line)\n`
 *   **LLR 4.3:** Return the `newline` buffer. (HLR 8.1)
 *   *Note: Specific parsing logic depends on Valgrind format variations.*
 
@@ -50,29 +51,33 @@ This document details the low-level requirements for each function within the `v
 
 *   **LLR 5.1:** Print a separator line (`---...`) to visually distinguish error blocks. (HLR 8.1)
 *   **LLR 5.2:** Print the `line_content` (containing the error type) as the header for the error block. (HLR 8.1)
+*   **LLR 5.3:** Finish the header with `Call Stack:\n` on the last line
 
 ---
 
 **6. `print_leak_summary_header(void)`**
 
-*   **LLR 6.1:** Print a separator line (`---...`). (HLR 8.1)
-*   **LLR 6.2:** Print the "LEAK SUMMARY:" header. (HLR 6.1, HLR 8.1)
+*   **LLR 6.1:** Print a separator line (`\n--- `) before the header and another (` ---\n`) after the header. (HLR 8.1)
+*   **LLR 6.2:** Print the "LEAK SUMMARY" header. (HLR 6.1, HLR 8.1)
 
 ---
 
 **7. `print_leak_summary_line(const char *line, const char *leak_type)`**
 
 *   **LLR 7.1:** Attempt to parse the `line` using `sscanf` to extract the number of bytes and blocks for the leak. (HLR 6.2)
-*   **LLR 7.2:** If parsing is successful, print a formatted line including the `leak_type`, bytes, and blocks. (HLR 6.2, HLR 8.1)
-*   **LLR 7.3:** If parsing fails, print the original `line` content as a fallback. (HLR 9.1)
+*   **LLR 7.2:** The line to be parsed starts with and arbitrary number of printable characters and spaces terminated with a `:` character. After that there is an integer representing the number of bytes followed by the words `bytes` and `in`. These words and the integers are separated by an arbitrary number of spaces. After these words and an arbitrary number of spaces, there is an integer representing the number of blocks
+*   **LLR 7.3:** If parsing is successful, print a formatted line starting with the two characters `*` followed by ` `. These are followed by the `leak_type`, bytes, and blocks. (HLR 6.2, HLR 8.1)
+*   **LLR 7.4:** If parsing fails, print the original `line` content as a fallback. (HLR 9.1)
 
 ---
 
 **8. `print_final_error_summary(const char *line)`**
 
 *   **LLR 8.1:** Attempt to parse the `line` using `sscanf` to extract the total number of errors. (HLR 7.1)
-*   **LLR 8.2:** If parsing is successful, print a formatted line indicating the total error count. (HLR 7.1, HLR 8.1)
-*   **LLR 8.3:** If parsing fails, print the original `line` content as a fallback. (HLR 9.1)
+*   **LLR 8.2:** If parsing is successful, print a header and formatted line indicating the total error count. (HLR 7.1, HLR 8.1)
+*   **LLR 8.3:** The header shall be "\n--- FINAL COUNTS ---\n"
+*   **LLR 8.4:** The formatted line shall be "* Total Errors Reported by Valgrind: " followed the total error count.
+*   **LLR 8.5:** If parsing fails, print the original `line` content as a fallback. (HLR 9.1)
 
 ---
 

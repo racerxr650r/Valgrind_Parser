@@ -35,6 +35,7 @@
 #include <errno.h> // For errno and strerror
 #include <libgen.h> // For basename
 #include <ctype.h> // For isalnum, isspace
+#include <locale.h> // For setlocale
 
  // --- Constants ---
 #define MAX_LINE_LENGTH 2048
@@ -59,7 +60,16 @@ extern const char *USER_CODE_EXTENSIONS[];
 extern const char *IGNORE_PATHS[];
 extern const char *ERROR_KEYWORDS[];
 
-// --- Function Prototypes ---
+// --- Function Prototypes For Mocked Functions ---
+extern int (*printF)(const char*, ...);
+extern FILE* (*Fopen)(const char *pathname, const char *mode);
+extern bool (*find_function_start_and_brace)(FILE *file, const char *function_name, int target_line, int *out_def_line, int *out_brace_line);
+extern void (*print_function_body)(FILE *file, int start_print_line, int brace_start_line, int highlight_line);
+
+void print_function_body_(FILE *file, int start_print_line, int brace_start_line, int highlight_line);
+bool find_function_start_and_brace_(FILE *file, const char *function_name, int target_line, int *out_def_line, int *out_brace_line);
+bool is_valid_function_char(char c);
+char *get_function_name(const char *line, char *newline);
 void initialize_parse_state(ParseState *state);
 bool check_start_new_error(const char *line_content, ParseState *state);
 void process_stack_trace_line(const char *line_content, ParseState *state);

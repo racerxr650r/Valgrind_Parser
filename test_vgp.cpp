@@ -2142,7 +2142,7 @@ TEST(PrintSourceFunction, HandlesFunctionNotFound)
     const char* func_name = "missing_func";
     int line_num = 5;
     char expected_warning[512];
-    snprintf(expected_warning, sizeof(expected_warning), "Warning: Could not locate function '%s' near line %d in file '%s'.\n", func_name, line_num, dummy_filename);
+    snprintf(expected_warning, sizeof(expected_warning), "Warning: Could not locate function '%s' near line %d in file '%s'.\n         (Check if function name or line number from Valgrind log is correct and file wasn't modified.)\n", func_name, line_num, dummy_filename);
 
     // Setup find mock for failure
     mock_find_success = false;

@@ -467,7 +467,7 @@ void print_source_function(const char *filename, const char *function_name, int 
     {
         // Provide a more specific warning based on whether the function name was found but the line number was outside,
         // or the function name itself wasn't found. (Current helper doesn't easily distinguish this, needs more state return)
-        printF("Warning: Could not locate function '%s' containing line %d in '%s'.\n",
+        printF("Warning: Could not locate function '%s' near line %d in file '%s'.\n",
                function_name, line_number, filename);
         printF("         (Check if function name or line number from Valgrind log is correct and file wasn't modified.)\n");
     }

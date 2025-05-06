@@ -47,11 +47,25 @@ int (*printF)(const char*, ...) = printf;
 FILE* (*Fopen)(const char *pathname, const char *mode) = fopen;
 bool (*find_function_start_and_brace)(FILE *file, const char *function_name, int target_line, int *out_def_line, int *out_brace_line) = find_function_start_and_brace_;
 void (*print_function_body)(FILE *file, int start_print_line, int brace_start_line, int highlight_line) = print_function_body_;
-
+void (*print_error_header)(const char *error_type) = print_error_header_;
+bool (*is_user_code_stack_trace)(const char *line) = is_user_code_stack_trace_;
+char* (*get_function_name)(const char *line, char *newline) = get_function_name_;
+bool (*extract_file_and_line)(const char *line, char *filename, char *function_name, int *line_number) = extract_file_and_line_;
+void (*print_source_function)(const char *filename, const char *function_name, int line_number) = print_source_function_;
+void (*process_stack_trace_line)(const char *line_content, ParseState *state) = process_stack_trace_line_;
+void (*finalize_error_block)(ParseState *state) = finalize_error_block_;
+void (*print_leak_summary_header)(void) = print_leak_summary_header_;
+void (*print_leak_summary_line)(const char *line, const char *leak_type) = print_leak_summary_line_;
+void (*print_final_error_summary)(const char *line) = print_final_error_summary_;
+void (*initialize_parse_state)(ParseState *state) = initialize_parse_state_;
+char* (*strip_valgrind_pid_prefix)(char *line) = strip_valgrind_pid_prefix_;
+void (*process_in_error_block)(const char *line_content, ParseState *state) = process_in_error_block_;
+bool (*check_start_new_error)(const char *line_content, ParseState *state) = check_start_new_error_;
+void (*process_summary_lines)(const char *line_content) = process_summary_lines_;
 
 // --- Helper Functions ---
 // Checks if a line is likely part of a user code stack trace.
-bool is_user_code_stack_trace(const char *line)
+bool is_user_code_stack_trace_(const char *line)
 {
     // Check for stack trace indentation
     if (strncmp(line, "   at ", 6) != 0 && strncmp(line, "   by ", 6) != 0)
@@ -87,7 +101,7 @@ bool is_user_code_stack_trace(const char *line)
 }
 
 // Removes the Valgrind PID prefix from a line.
-char *strip_valgrind_pid_prefix(char *line)
+char *strip_valgrind_pid_prefix_(char *line)
 {
     // Locate the first occurrence of "=="
     char *prefix_end = strstr(line, "==");
@@ -126,7 +140,7 @@ char *strip_valgrind_pid_prefix(char *line)
 }
 
 // Get just the function name, filename, and line number from a Valgrind stack trace line
-char *get_function_name(const char *line, char *newline)
+char *get_function_name_(const char *line, char *newline)
 {
     char function[MAX_LINE_LENGTH] = "?";
     char filename[MAX_LINE_LENGTH] = "?";
@@ -144,7 +158,7 @@ char *get_function_name(const char *line, char *newline)
 }
 
 // Prints an error block header.
-void print_error_header(const char *error_type)
+void print_error_header_(const char *error_type)
 {
     printF("----------------------------------------\n");
     if(error_type[strlen(error_type) - 1] == '\n')
@@ -156,13 +170,13 @@ void print_error_header(const char *error_type)
 }
 
 // Prints a leak summary header.
-void print_leak_summary_header(void)
+void print_leak_summary_header_(void)
 {
     printF("\n--- LEAK SUMMARY ---\n");
 }
 
 // Prints a leak summary line.
-void print_leak_summary_line(const char *line, const char *leak_type)
+void print_leak_summary_line_(const char *line, const char *leak_type)
 {
     int bytes = 0, blocks = 0;
     //if (sscanf(line, "%*[^:]: %d bytes in %d blocks", &bytes, &blocks) == 2)
@@ -180,7 +194,7 @@ void print_leak_summary_line(const char *line, const char *leak_type)
 }
 
 // Prints the final error count summary.
-void print_final_error_summary(const char *line)
+void print_final_error_summary_(const char *line)
 {
     int error_count = 0;
     //if (sscanf(line, "ERROR SUMMARY: %d errors", &error_count) == 1)
@@ -199,7 +213,7 @@ void print_final_error_summary(const char *line)
 }
 
 // Extracts the filename, function name, and line number from a stack trace line.
-bool extract_file_and_line(const char *line, char *filename, char *function_name, int *line_number)
+bool extract_file_and_line_(const char *line, char *filename, char *function_name, int *line_number)
 {
     if(line == NULL || filename == NULL || function_name == NULL || line_number == NULL)
     {
@@ -431,7 +445,7 @@ void print_function_body_(FILE *file, int start_print_line, int brace_start_line
 }
 
 // Prints the source code of the entire function containing the given line number.
-void print_source_function(const char *filename, const char *function_name, int line_number)
+void print_source_function_(const char *filename, const char *function_name, int line_number)
 {
     // Handle case where function name might be empty
     if (function_name == NULL || function_name[0] == '\0') {
@@ -477,21 +491,27 @@ void print_source_function(const char *filename, const char *function_name, int 
 
 // --- Core Parsing Logic ---
 // Initializes the parsing state
-void initialize_parse_state(ParseState *state)
+void initialize_parse_state_(ParseState *state)
 {
-    state->in_error_block = false;
-    state->print_function = false;
-    state->stack_lines_shown = 0;
-    state->user_code_found_for_error = false;
-    state->current_error_type[0] = '\0';
-    state->error_filename[0] = '\0';
-    state->error_function_name[0] = '\0';
-    state->error_line_number = -1;
+    if(state != NULL)
+    {
+        state->in_error_block = false;
+        state->print_function = false;
+        state->stack_lines_shown = 0;
+        state->user_code_found_for_error = false;
+        state->current_error_type[0] = '\0';
+        state->error_filename[0] = '\0';
+        state->error_function_name[0] = '\0';
+        state->error_line_number = -1;
+    }
 }
 
 // Checks if the line marks the start of a new error block
-bool check_start_new_error(const char *line_content, ParseState *state)
+bool check_start_new_error_(const char *line_content, ParseState *state)
 {
+    if (line_content == NULL || state == NULL)
+        return false; // Invalid arguments
+
     if (!state->in_error_block)
     {
         for (int i = 0; ERROR_KEYWORDS[i] != NULL; ++i)
@@ -513,8 +533,11 @@ bool check_start_new_error(const char *line_content, ParseState *state)
 }
 
 // Processes a line identified as part of a stack trace
-void process_stack_trace_line(const char *line_content, ParseState *state)
+void process_stack_trace_line_(const char *line_content, ParseState *state)
 {
+    if(line_content == NULL || state == NULL)
+        return; // Invalid arguments
+
     if (state->stack_lines_shown < STACK_TRACE_CONTEXT_LINES || is_user_code_stack_trace(line_content))
     {
         char stack_entry[MAX_LINE_LENGTH];
@@ -537,8 +560,11 @@ void process_stack_trace_line(const char *line_content, ParseState *state)
 }
 
 // Finalizes the processing of an error block (prints source, resets state)
-void finalize_error_block(ParseState *state)
+void finalize_error_block_(ParseState *state)
 {
+    if (state == NULL)
+        return; // Invalid arguments
+
     if (!state->user_code_found_for_error && state->stack_lines_shown > 0)
     {
         printF("  (-> Check stack trace above for user code related to '%s')\n", state->current_error_type);
@@ -556,8 +582,11 @@ void finalize_error_block(ParseState *state)
 }
 
 // Processes lines within an active error block
-void process_in_error_block(const char *line_content, ParseState *state)
+void process_in_error_block_(const char *line_content, ParseState *state)
 {
+    if (line_content == NULL || state == NULL)
+        return; // Invalid arguments
+    
     if (strncmp(line_content, "   at ", 6) == 0 || strncmp(line_content, "   by ", 6) == 0)
     {
         process_stack_trace_line(line_content, state);
@@ -572,8 +601,11 @@ void process_in_error_block(const char *line_content, ParseState *state)
 }
 
 // Checks for and processes summary lines (Leak or Final)
-void process_summary_lines(const char *line_content)
+void process_summary_lines_(const char *line_content)
 {
+    if (line_content == NULL)
+        return; // Invalid arguments
+
     if (strstr(line_content, "LEAK SUMMARY:"))
     {
         print_leak_summary_header();
@@ -603,6 +635,9 @@ void process_summary_lines(const char *line_content)
 // Processes the entire log file
 void process_log_file(FILE *file)
 {
+    if (file == NULL)
+        return; // Invalid file pointer
+
     char line[MAX_LINE_LENGTH];
     ParseState state;
     initialize_parse_state(&state);

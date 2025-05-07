@@ -154,6 +154,7 @@ This document details the low-level requirements for each function within the `v
 *   **LLR 14.6:** Initialize `state->error_filename` to an empty string. (HLR 2.1)
 *   **LLR 14.7:** Initialize `state->error_function_name` to an empty string. (HLR 2.1)
 *   **LLR 14.8:** Set `state->error_line_number` to `-1`. (HLR 2.1)
+*   **LLR 14.9:** Set `state->error_count` to `0`. (HLR 2.1)
 
 ---
 

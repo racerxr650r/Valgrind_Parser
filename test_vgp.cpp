@@ -397,14 +397,15 @@ TEST(PrintErrorHeader, PrintsCorrectFormatWithNewline)
     // LLR 5.2: Verify the error type line_content is printed (with prefix).
     // LLR 5.3: Verify "Call Stack:\n" is printed at the end.
     const char* error_input = "Invalid read of size 4\n";
+    ParseState state = { .error_count = 0 }; // Initialize ParseState
     const char* expected_output =
         "----------------------------------------\n"
-        "[ERROR] Invalid read of size 4\n"
+        "[ERROR #1] Invalid read of size 4\n"
         "----------------------------------------\n"
         "Call Stack:\n";
 
     // Call the function - CppUTest captures stdout automatically
-    print_error_header(error_input);
+    print_error_header(error_input, &state);
 
     // Compare captured output with expected string
     STRCMP_EQUAL(expected_output, gBuffer);
@@ -417,14 +418,15 @@ TEST(PrintErrorHeader, PrintsCorrectFormatWithoutNewline)
     // LLR 5.2: Verify the error type line_content is printed (with prefix), adding newline.
     // LLR 5.3: Verify "Call Stack:\n" is printed at the end.
     const char* error_input = "Mismatched free() / delete / delete[]";
+    ParseState state = { .error_count = 0 }; // Initialize ParseState
     const char* expected_output =
         "----------------------------------------\n"
-        "[ERROR] Mismatched free() / delete / delete[]\n" // Newline added by function
+        "[ERROR #1] Mismatched free() / delete / delete[]\n" // Newline added by function
         "----------------------------------------\n"
         "Call Stack:\n";
 
     // Call the function - CppUTest captures stdout automatically
-    print_error_header(error_input);
+    print_error_header(error_input, &state);
 
     // Compare captured output with expected string
     STRCMP_EQUAL(expected_output, gBuffer);
@@ -437,14 +439,15 @@ TEST(PrintErrorHeader, HandlesEmptyErrorString)
     // LLR 5.2: Verify empty error type line_content is handled (prints prefix and newline).
     // LLR 5.3: Verify "Call Stack:\n" is printed at the end.
     const char* error_input = "";
+    ParseState state = { .error_count = 0 }; // Initialize ParseState
     const char* expected_output =
         "----------------------------------------\n"
-        "[ERROR] \n" // Newline added by function
+        "[ERROR #1] \n" // Newline added by function
         "----------------------------------------\n"
         "Call Stack:\n";
 
     // Call the function - CppUTest captures stdout automatically
-    print_error_header(error_input);
+    print_error_header(error_input, &state);
 
     // Compare captured output with expected string
     STRCMP_EQUAL(expected_output, gBuffer);
@@ -455,14 +458,15 @@ TEST(PrintErrorHeader, HandlesInputWithFormatSpecifiers)
 {
     // LLR 5.1, 5.2, 5.3: Ensure format specifiers in the input are printed literally.
     const char* error_input = "Error code %d, message: %s\n";
+    ParseState state = { .error_count = 0 }; // Initialize ParseState
     const char* expected_output =
         "----------------------------------------\n"
-        "[ERROR] Error code %d, message: %s\n" // Specifiers should be printed as-is
+        "[ERROR #1] Error code %d, message: %s\n" // Specifiers should be printed as-is
         "----------------------------------------\n"
         "Call Stack:\n";
 
     // Call the function - Assuming it uses the mocked printBuff via PrintFormated
-    print_error_header(error_input);
+    print_error_header(error_input, &state);
 
     // Compare captured output with expected string
     STRCMP_EQUAL(expected_output, gBuffer);
@@ -475,18 +479,19 @@ TEST(PrintErrorHeader, HandlesLongInputString)
     const char* error_input = "This is a very long error message that might test buffer limits "
                               "if they were fixed, but the mock uses realloc so it should be fine. "
                               "Adding more text just to be sure. Still going. Almost there. Done.";
+    ParseState state = { .error_count = 0 }; // Initialize ParseState
     // Construct expected output dynamically to avoid very long literal
-    char expected_output[1024]; // Adjust size if needed
+    char expected_output[2048]; // Adjust size if needed
     snprintf(expected_output, sizeof(expected_output),
              "----------------------------------------\n"
-             "[ERROR] %s\n" // Add newline since input doesn't have one
+             "[ERROR #1] %s\n" // Add newline since input doesn't have one
              "----------------------------------------\n"
              "Call Stack:\n",
              error_input);
 
 
     // Call the function - Assuming it uses the mocked printBuff via PrintFormated
-    print_error_header(error_input);
+    print_error_header(error_input, &state);
 
     // Compare captured output with expected string
     STRCMP_EQUAL(expected_output, gBuffer);
@@ -788,11 +793,13 @@ TEST(PrintFinalErrorSummary, HandlesSuccessfulParseZeroErrors)
     // LLR 8.3 (Header): Header matches "\n--- FINAL COUNTS ---\n".
     // LLR 8.4: Formatted line matches "* Total Errors Reported by Valgrind: 0\n".
     const char* input_line = "==12345== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)";
+    ParseState state = { .error_count = 0 }; // Initialize ParseState
     const char* expected_output =
         "\n--- FINAL COUNTS ---\n" // Note the leading newline as per LLR 8.3
-        "* Total Errors Reported by Valgrind: 0\n";
+        "* Total Errors: 0\n"
+        "* Possible Leaks: 0\n";
 
-    print_final_error_summary(input_line);
+    print_final_error_summary(input_line, &state);
 
     STRCMP_EQUAL(expected_output, gBuffer);
 }
@@ -805,11 +812,13 @@ TEST(PrintFinalErrorSummary, HandlesSuccessfulParseOneError)
     // LLR 8.3 (Header): Header matches "\n--- FINAL COUNTS ---\n".
     // LLR 8.4: Formatted line matches "* Total Errors Reported by Valgrind: 1\n".
     const char* input_line = "==12345== ERROR SUMMARY: 1 errors from 1 contexts (suppressed: 0 from 0)";
+    ParseState state = { .error_count = 1 }; // Initialize ParseState
     const char* expected_output =
         "\n--- FINAL COUNTS ---\n"
-        "* Total Errors Reported by Valgrind: 1\n";
+        "* Total Errors: 1\n"
+        "* Possible Leaks: 0\n";
 
-    print_final_error_summary(input_line);
+    print_final_error_summary(input_line, &state);
 
     STRCMP_EQUAL(expected_output, gBuffer);
 }
@@ -822,11 +831,13 @@ TEST(PrintFinalErrorSummary, HandlesSuccessfulParseMultipleErrors)
     // LLR 8.3 (Header): Header matches "\n--- FINAL COUNTS ---\n".
     // LLR 8.4: Formatted line matches "* Total Errors Reported by Valgrind: 42\n".
     const char* input_line = "==12345== ERROR SUMMARY: 42 errors from 15 contexts (suppressed: 5 from 5)";
+    ParseState state = { .error_count = 40 }; // Initialize ParseState
     const char* expected_output =
         "\n--- FINAL COUNTS ---\n"
-        "* Total Errors Reported by Valgrind: 42\n";
+        "* Total Errors: 40\n"
+        "* Possible Leaks: 2\n";
 
-    print_final_error_summary(input_line);
+    print_final_error_summary(input_line, &state);
 
     STRCMP_EQUAL(expected_output, gBuffer);
 }
@@ -840,11 +851,13 @@ TEST(PrintFinalErrorSummary, HandlesSuccessfulParseWithVariedSpacing)
     // LLR 8.4: Formatted line matches "* Total Errors Reported by Valgrind: 5\n".
     // Assuming sscanf format like " ERROR SUMMARY: %d errors"
     const char* input_line = "==12345== ERROR SUMMARY:   5   errors from   3 contexts";
+    ParseState state = { .error_count = 3 }; // Initialize ParseState
     const char* expected_output =
         "\n--- FINAL COUNTS ---\n"
-        "* Total Errors Reported by Valgrind: 5\n";
+        "* Total Errors: 3\n"
+        "* Possible Leaks: 2\n";
 
-    print_final_error_summary(input_line);
+    print_final_error_summary(input_line, &state);
 
     STRCMP_EQUAL(expected_output, gBuffer);
 }
@@ -857,11 +870,13 @@ TEST(PrintFinalErrorSummary, HandlesSuccessfulParseWithDifferentPrefix)
     // LLR 8.3 (Header): Header matches "\n--- FINAL COUNTS ---\n".
     // LLR 8.4: Formatted line matches "* Total Errors Reported by Valgrind: 9\n".
     const char* input_line = "   Some other text ERROR SUMMARY: 9 errors from 2 contexts";
+    ParseState state = { .error_count = 0 }; // Initialize ParseState
     const char* expected_output =
         "\n--- FINAL COUNTS ---\n"
-        "* Total Errors Reported by Valgrind: 9\n";
+        "* Total Errors: 0\n"
+        "* Possible Leaks: 9\n";
 
-    print_final_error_summary(input_line);
+    print_final_error_summary(input_line, &state);
 
     STRCMP_EQUAL(expected_output, gBuffer);
 }
@@ -872,11 +887,13 @@ TEST(PrintFinalErrorSummary, HandlesSuccessfulParseMissingErrorsKeyword)
     // LLR 8.1: Input line format prevents successful sscanf parsing (missing 'errors').
     // LLR 8.5 (Fallback): Output falls back to printing the original line content.
     const char* input_line = "==12345== ERROR SUMMARY: 10 from 3 contexts";
+    ParseState state = { .error_count = 3 }; // Initialize ParseState
     const char* expected_output =
         "\n--- FINAL COUNTS ---\n"
-        "* Total Errors Reported by Valgrind: 10\n";
+        "* Total Errors: 3\n"
+        "* Possible Leaks: 7\n";
 
-    print_final_error_summary(input_line);
+    print_final_error_summary(input_line, &state);
 
     STRCMP_EQUAL(expected_output, gBuffer);
 }
@@ -887,9 +904,10 @@ TEST(PrintFinalErrorSummary, HandlesFailedParseMissingNumber)
     // LLR 8.1: Input line format prevents successful sscanf parsing (missing number).
     // LLR 8.5 (Fallback): Output falls back to printing the original line content.
     const char* input_line = "==12345== ERROR SUMMARY: errors from contexts";
+    ParseState state = { .error_count = 0 }; // Initialize ParseState
     const char* expected_output = "==12345== ERROR SUMMARY: errors from contexts\n"; // Expect original line + newline
 
-    print_final_error_summary(input_line);
+    print_final_error_summary(input_line, &state);
 
     STRCMP_EQUAL(expected_output, gBuffer);
 }
@@ -900,9 +918,10 @@ TEST(PrintFinalErrorSummary, HandlesFailedParseIncorrectKeyword)
     // LLR 8.1: Input line format prevents successful sscanf parsing (wrong keyword).
     // LLR 8.5 (Fallback): Output falls back to printing the original line content.
     const char* input_line = "==12345== ERROR SUMMARY: five errors from 3 contexts";
+    ParseState state = { .error_count = 0 }; // Initialize ParseState
     const char* expected_output = "==12345== ERROR SUMMARY: five errors from 3 contexts\n"; // Expect original line + newline
 
-    print_final_error_summary(input_line);
+    print_final_error_summary(input_line, &state);
 
     STRCMP_EQUAL(expected_output, gBuffer);
 }
@@ -913,9 +932,10 @@ TEST(PrintFinalErrorSummary, HandlesFailedParseMissingSummaryKeyword)
     // LLR 8.1: Input line format prevents successful sscanf parsing (missing 'ERROR SUMMARY:').
     // LLR 8.5 (Fallback): Output falls back to printing the original line content.
     const char* input_line = "==12345== 10 errors from 3 contexts";
+    ParseState state = { .error_count = 0 }; // Initialize ParseState
     const char* expected_output = "==12345== 10 errors from 3 contexts\n"; // Expect original line + newline
 
-    print_final_error_summary(input_line);
+    print_final_error_summary(input_line, &state);
 
     STRCMP_EQUAL(expected_output, gBuffer);
 }
@@ -927,9 +947,10 @@ TEST(PrintFinalErrorSummary, HandlesFailedParseEmptyInput)
     // LLR 8.1: Input line format prevents successful sscanf parsing (empty line).
     // LLR 8.5 (Fallback): Output falls back to printing the original line content (empty) + newline.
     const char* input_line = "";
+    ParseState state = { .error_count = 0 }; // Initialize ParseState
     const char* expected_output = "\n"; // Expect just a newline for empty input fallback
 
-    print_final_error_summary(input_line);
+    print_final_error_summary(input_line, &state);
 
     STRCMP_EQUAL(expected_output, gBuffer);
 }
@@ -940,9 +961,10 @@ TEST(PrintFinalErrorSummary, HandlesFailedParsePrefixOnly)
     // LLR 8.1: Input line format prevents successful sscanf parsing (only prefix).
     // LLR 8.5 (Fallback): Output falls back to printing the original line content.
     const char* input_line = "==12345== ERROR SUMMARY:";
+    ParseState state = { .error_count = 0 }; // Initialize ParseState
     const char* expected_output = "==12345== ERROR SUMMARY:\n"; // Expect original line + newline
 
-    print_final_error_summary(input_line);
+    print_final_error_summary(input_line, &state);
 
     STRCMP_EQUAL(expected_output, gBuffer);
 }
@@ -953,9 +975,10 @@ TEST(PrintFinalErrorSummary, HandlesFailedParseInputWithNewline)
     // LLR 8.1: Input line format prevents successful sscanf parsing.
     // LLR 8.5 (Fallback): Output falls back to printing the original line content (should not add extra newline).
     const char* input_line = "==12345== ERROR SUMMARY: Malformed line\n";
+    ParseState state = { .error_count = 0 }; // Initialize ParseState
     const char* expected_output = "==12345== ERROR SUMMARY: Malformed line\n"; // Expect original line as-is
 
-    print_final_error_summary(input_line);
+    print_final_error_summary(input_line, &state);
 
     STRCMP_EQUAL(expected_output, gBuffer);
 }
@@ -966,9 +989,10 @@ TEST(PrintFinalErrorSummary, HandlesFailedParseWhitespaceInput)
     // LLR 8.1: Input line format prevents successful sscanf parsing.
     // LLR 8.5 (Fallback): Output falls back to printing the original line content (whitespace) + newline.
     const char* input_line = "   \t ";
+    ParseState state = { .error_count = 0 }; // Initialize ParseState
     const char* expected_output = "   \t \n"; // Expect original whitespace + newline
 
-    print_final_error_summary(input_line);
+    print_final_error_summary(input_line, &state);
 
     STRCMP_EQUAL(expected_output, gBuffer);
 }
@@ -2212,6 +2236,9 @@ TEST(InitializeParseState, InitializesAllFieldsCorrectly)
 
     // LLR 14.8: Check error_line_number
     CHECK_EQUAL(-1, test_state.error_line_number);
+
+    // LLR 14.9: Check error_count
+    CHECK_EQUAL(0, test_state.error_count);
 }
 
 // Test case: Handles NULL pointer input gracefully
@@ -2228,7 +2255,7 @@ TEST(InitializeParseState, HandlesNullInput)
 // --- Mock Implementations ---
 static bool mock_print_error_header_called = false;
 static char mock_print_error_header_arg[MAX_LINE_LENGTH]; // Assuming MAX_LINE_LENGTH
-void mock_print_error_header_impl(const char *error_type) {
+void mock_print_error_header_impl(const char *error_type, ParseState *state) {
     mock_print_error_header_called = true;
     if (error_type) {
         strncpy(mock_print_error_header_arg, error_type, sizeof(mock_print_error_header_arg) - 1);
@@ -3147,10 +3174,13 @@ void mock_print_leak_summary_line_impl(const char *line, const char *leak_type) 
 
 static bool mock_print_final_error_summary_called = false;
 static char mock_pfes_line_arg[MAX_LINE_LENGTH];
-void mock_print_final_error_summary_impl(const char *line) {
+void mock_print_final_error_summary_impl(const char *line, ParseState *state) 
+{
     mock_print_final_error_summary_called = true;
-    if (line) strncpy(mock_pfes_line_arg, line, sizeof(mock_pfes_line_arg) - 1);
-    else mock_pfes_line_arg[0] = '\0';
+    if (line) 
+        strncpy(mock_pfes_line_arg, line, sizeof(mock_pfes_line_arg) - 1);
+    else
+        mock_pfes_line_arg[0] = '\0';
     mock_pfes_line_arg[sizeof(mock_pfes_line_arg) - 1] = '\0';
 
     printF("--- Mock print_final_error_summary called ('%s') ---\n", line);
@@ -3200,8 +3230,9 @@ TEST(ProcessSummaryLines, CallsPrintLeakSummaryHeader)
 {
     // LLR 19.1: Line contains "LEAK SUMMARY:", expect print_leak_summary_header call.
     const char* line = "==123== LEAK SUMMARY:";
+    ParseState test_state = {.error_count = 0};
 
-    process_summary_lines(line);
+    process_summary_lines(line, &test_state);
 
     CHECK_TRUE(mock_print_leak_summary_header_called);
     CHECK_FALSE(mock_print_leak_summary_line_called);
@@ -3214,9 +3245,10 @@ TEST(ProcessSummaryLines, CallsPrintLeakSummaryLineForDefinitelyLost)
 {
     // LLR 19.2: Line contains "definitely lost:", expect print_leak_summary_line call.
     const char* line = "==123==    definitely lost: 100 bytes in 5 blocks";
+    ParseState test_state = {.error_count = 0};
     const char* expected_type = "Definitely Lost";
 
-    process_summary_lines(line);
+    process_summary_lines(line, &test_state);
 
     CHECK_FALSE(mock_print_leak_summary_header_called);
     CHECK_TRUE(mock_print_leak_summary_line_called);
@@ -3233,9 +3265,10 @@ TEST(ProcessSummaryLines, CallsPrintLeakSummaryLineForIndirectlyLost)
 {
     // LLR 19.3: Line contains "indirectly lost:", expect print_leak_summary_line call.
     const char* line = "==123==    indirectly lost: 50 bytes in 2 blocks";
+    ParseState test_state = {.error_count = 0};
     const char* expected_type = "Indirectly Lost";
 
-    process_summary_lines(line);
+    process_summary_lines(line, &test_state);
 
     CHECK_FALSE(mock_print_leak_summary_header_called);
     CHECK_TRUE(mock_print_leak_summary_line_called);
@@ -3250,9 +3283,10 @@ TEST(ProcessSummaryLines, CallsPrintLeakSummaryLineForPossiblyLost)
 {
     // LLR 19.4: Line contains "possibly lost:", expect print_leak_summary_line call.
     const char* line = "==123==    possibly lost: 20 bytes in 1 blocks";
+    ParseState test_state = {.error_count = 0};
     const char* expected_type = "Possibly Lost";
 
-    process_summary_lines(line);
+    process_summary_lines(line, &test_state);
 
     CHECK_FALSE(mock_print_leak_summary_header_called);
     CHECK_TRUE(mock_print_leak_summary_line_called);
@@ -3267,9 +3301,10 @@ TEST(ProcessSummaryLines, CallsPrintLeakSummaryLineForStillReachable)
 {
     // LLR 19.5: Line contains "still reachable:", expect print_leak_summary_line call.
     const char* line = "==123==    still reachable: 1,024 bytes in 10 blocks";
+    ParseState test_state = {.error_count = 0};
     const char* expected_type = "Still Reachable";
 
-    process_summary_lines(line);
+    process_summary_lines(line, &test_state);
 
     CHECK_FALSE(mock_print_leak_summary_header_called);
     CHECK_TRUE(mock_print_leak_summary_line_called);
@@ -3284,8 +3319,9 @@ TEST(ProcessSummaryLines, CallsPrintFinalErrorSummary)
 {
     // LLR 19.6: Line contains "ERROR SUMMARY:", expect print_final_error_summary call.
     const char* line = "==123== ERROR SUMMARY: 5 errors from 3 contexts (suppressed: 0 from 0)";
+    ParseState test_state = {.error_count = 0};
 
-    process_summary_lines(line);
+    process_summary_lines(line, &test_state);
 
     CHECK_FALSE(mock_print_leak_summary_header_called);
     CHECK_FALSE(mock_print_leak_summary_line_called);
@@ -3301,8 +3337,9 @@ TEST(ProcessSummaryLines, DoesNothingForUnmatchedLine)
 {
     // No LLR explicitly covers this, but the function should do nothing.
     const char* line = "==123== Copyright (C) 2002-2017, and GNU GPL'd, by Julian Seward et al.";
+    ParseState test_state = {.error_count = 0};
 
-    process_summary_lines(line);
+    process_summary_lines(line, &test_state);
 
     CheckNoMocksCalled();
 }
@@ -3312,8 +3349,9 @@ TEST(ProcessSummaryLines, DoesNothingForEmptyLine)
 {
     // No LLR explicitly covers this, but the function should do nothing.
     const char* line = "";
+    ParseState test_state = {.error_count = 0};
 
-    process_summary_lines(line);
+    process_summary_lines(line, &test_state);
 
     CheckNoMocksCalled();
 }
@@ -3323,8 +3361,9 @@ TEST(ProcessSummaryLines, DoesNothingForWhitespaceLine)
 {
     // No LLR explicitly covers this, but the function should do nothing.
     const char* line = "   \t \n";
+    ParseState test_state = {.error_count = 0};
 
-    process_summary_lines(line);
+    process_summary_lines(line, &test_state);
 
     CheckNoMocksCalled();
 }
@@ -3333,8 +3372,10 @@ TEST(ProcessSummaryLines, DoesNothingForWhitespaceLine)
 // Test case for LLR 19.7: Handles NULL line input gracefully
 TEST(ProcessSummaryLines, HandlesNullLineInput)
 {
+    ParseState test_state = {.error_count = 0};
+
     // LLR 19.7: Should return immediately without crashing or calling mocks.
-    process_summary_lines(NULL);
+    process_summary_lines(NULL, &test_state);
 
     // If we reach here without crashing, the test passes implicitly.
     CHECK(true);
@@ -3445,7 +3486,7 @@ bool process_log_file_mock_csne(const char *line_content, ParseState *state) {
 }
 
 // Mock function for process_summary_lines
-void process_log_file_mock_psl(const char *line_content) {
+void process_log_file_mock_psl(const char *line_content, ParseState *state) {
     g_psl_call_count++;
     mock_process_summary_lines_impl(line_content);
 }

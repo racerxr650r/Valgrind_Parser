@@ -8,8 +8,16 @@
 # Build Variables +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # Application target executable name
 APP_TARGET = vgp
-# Test target executable name
-TEST_TARGET = test_vgp
+# Unit test target executable name
+UNIT_TEST_TARGET = test_vgp
+# Integration test target executable name
+INTEGRATION_TEST_TARGET = integration_test
+# Valgrind output file
+VALGRIND.OUT = valgrind.out
+# VGP output file
+VGP.OUT = vgp.out
+# Integration test output file
+INTEGRATION_TEST.OUT = integration_test.out
 # Project root directory
 PROJECT_ROOT = $(shell pwd)
 # Source directory
@@ -18,12 +26,16 @@ SRCDIR = $(PROJECT_ROOT)
 APP_SRC = $(SRCDIR)/main.c
 # App object file
 APP_OBJ = $(patsubst $(SRCDIR)/%.c,$(BUILD_DIR)/%.o,$(APP_SRC))
-# Test main source file
-TEST_SRC = $(SRCDIR)/test_vgp.c
-# Test object file
-TEST_OBJ = $(patsubst $(SRCDIR)/%.c,$(BUILD_DIR)/%.o,$(TEST_SRC))
+# Unit test main source file
+UNIT_TEST_SRC = $(SRCDIR)/test_vgp.c
+# Unit test object file
+UNIT_TEST_OBJ = $(patsubst $(SRCDIR)/%.c,$(BUILD_DIR)/%.o,$(UNIT_TEST_SRC))
+# Integration test main source file
+INTEGRATION_TEST_SRC = $(SRCDIR)/integration_test.c
+# Integration test object file
+INTEGRATION_TEST_OBJ = $(patsubst $(SRCDIR)/%.c,$(BUILD_DIR)/%.o,$(INTEGRATION_TEST_SRC))
 # Common source files
-COMMON_SRC = $(filter-out $(APP_SRC) $(TEST_SRC),$(wildcard $(SRCDIR)/*.c))
+COMMON_SRC = $(filter-out $(APP_SRC) $(UNIT_TEST_SRC) $(INTEGRATION_TEST_SRC),$(wildcard $(SRCDIR)/*.c))
 # Common object files
 COMMON_OBJS = $(patsubst $(SRCDIR)/%.c,$(BUILD_DIR)/%.o,$(COMMON_SRC))
 # Dependency files
@@ -59,9 +71,12 @@ OPTIONS = -c -v
 all:		build $(BUILD_DIR)/$(APP_TARGET)
 
 # Build all test target files
-test:		build $(BUILD_DIR)/$(TEST_TARGET)
-	@echo "Running tests..."
-	$(BUILD_DIR)/$(TEST_TARGET) $(OPTIONS)
+test:		build $(BUILD_DIR)/$(UNIT_TEST_TARGET) $(BUILD_DIR)/$(INTEGRATION_TEST_TARGET) $(BUILD_DIR)/$(APP_TARGET)
+	@echo "Running unit tests..."
+	$(BUILD_DIR)/$(UNIT_TEST_TARGET) $(OPTIONS)
+	@echo "Running integration tests..."
+	valgrind --leak-check=full --log-file=$(BUILD_DIR)/$(VALGRIND.OUT) --fullpath-after=string $(BUILD_DIR)/$(INTEGRATION_TEST_TARGET) >> $(BUILD_DIR)/$(INTEGRATION_TEST.OUT)
+	$(BUILD_DIR)/$(APP_TARGET) $(BUILD_DIR)/$(VALGRIND.OUT) > $(BUILD_DIR)/$(VGP.OUT)
 
 # Create the build directory
 build:
@@ -82,10 +97,15 @@ $(BUILD_DIR)/%.o: $(SRCDIR)/%.cpp
 	@echo "Compiling $<..."
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Build the test app from the object files
-$(BUILD_DIR)/$(TEST_TARGET): $(TEST_OBJ) $(COMMON_OBJS)
-	@echo "Linking $(TEST_TARGET)..."
+# Build the unit test app from the object files
+$(BUILD_DIR)/$(UNIT_TEST_TARGET): $(UNIT_TEST_OBJ) $(COMMON_OBJS)
+	@echo "Linking $(UNIT_TEST_TARGET)..."
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
+
+# Build the integration test app from the object files
+$(BUILD_DIR)/$(INTEGRATION_TEST_TARGET): $(INTEGRATION_TEST_OBJ) $(COMMON_OBJS)
+	@echo "Linking $(INTEGRATION_TEST_TARGET)..."
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 # Build the app with debug symbols
 debug: build $(COMMON_OBJS)

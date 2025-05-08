@@ -76,7 +76,7 @@ test:		build $(BUILD_DIR)/$(UNIT_TEST_TARGET) $(BUILD_DIR)/$(INTEGRATION_TEST_TA
 	$(BUILD_DIR)/$(UNIT_TEST_TARGET) $(OPTIONS)
 	@echo "Running integration tests..."
 	valgrind --leak-check=full --log-file=$(BUILD_DIR)/$(VALGRIND.OUT) --fullpath-after=string $(BUILD_DIR)/$(INTEGRATION_TEST_TARGET) >> $(BUILD_DIR)/$(INTEGRATION_TEST.OUT)
-	$(BUILD_DIR)/$(APP_TARGET) $(BUILD_DIR)/$(VALGRIND.OUT) > $(BUILD_DIR)/$(VGP.OUT)
+	$(BUILD_DIR)/$(APP_TARGET) -v $(BUILD_DIR)/$(VALGRIND.OUT) > $(BUILD_DIR)/$(VGP.OUT)
 
 # Create the build directory
 build:

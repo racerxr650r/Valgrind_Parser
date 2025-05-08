@@ -50,6 +50,7 @@ typedef struct
     bool print_source; // Flag to indicate if source should be printed
     bool print_stack;  // Flag to indicate if stack trace should be printed
     bool print_leak_summary; // Flag to indicate if leak summary should be printed
+    char *log_file; // Path to the Valgrind log file
 }AppConfig;
 
 typedef struct {
@@ -65,6 +66,7 @@ typedef struct {
 } ParseState;
 
 // --- Global Variables ---
+extern AppConfig app_config; // Global configuration for the application
 extern const char *USER_CODE_EXTENSIONS[];
 extern const char *IGNORE_PATHS[];
 extern const char *ERROR_KEYWORDS[];

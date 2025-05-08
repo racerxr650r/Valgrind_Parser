@@ -31,6 +31,13 @@
 #include "vgp.h"
 
 // --- Configuration ---
+AppConfig app_config = {.verbose = false,
+                        .print_source = false,
+                        .print_stack = false,
+                        .print_leak_summary = false,
+                        .log_file = NULL };
+
+
 const char *USER_CODE_EXTENSIONS[] = { ".c", ".cpp", ".h", ".hpp", NULL };
 const char *IGNORE_PATHS[] = { "/usr/", "/lib/", "vg_", NULL };
 const char *ERROR_KEYWORDS[] = {
@@ -166,8 +173,8 @@ void print_error_header_(const char *error_type, ParseState *state)
         printF("%s", error_type);
     else
         printF("%s\n", error_type);
-    printF("----------------------------------------\n");
-    printF("Call Stack:\n");
+    if(app_config.print_stack || app_config.verbose)
+        printF("Call Stack:\n");
 }
 
 // Prints a leak summary header.
@@ -544,8 +551,11 @@ void process_stack_trace_line_(const char *line_content, ParseState *state)
     if (state->stack_lines_shown < STACK_TRACE_CONTEXT_LINES || is_user_code_stack_trace(line_content))
     {
         char stack_entry[MAX_LINE_LENGTH];
-        printF("  - %s", get_function_name((const char*)line_content, stack_entry)); // Cast needed for get_function_name prototype
-        state->stack_lines_shown++;
+        if(app_config.print_stack || app_config.verbose)
+        {
+            printF("  - %s", get_function_name((const char*)line_content, stack_entry)); // Cast needed for get_function_name prototype
+            state->stack_lines_shown++;
+        }
 
         if (!state->user_code_found_for_error && is_user_code_stack_trace(line_content))
         {
@@ -556,9 +566,12 @@ void process_stack_trace_line_(const char *line_content, ParseState *state)
     }
     else if (!state->user_code_found_for_error && state->stack_lines_shown == STACK_TRACE_CONTEXT_LINES)
     {
-        // Print ellipsis only once after context lines if no user code found yet
-        printF("  - ...\n");
-        state->stack_lines_shown++; // Increment to prevent printing ellipsis again
+        if(app_config.print_stack || app_config.verbose)
+        {
+            // Print ellipsis only once after context lines if no user code found yet
+            printF("  - ...\n");
+            state->stack_lines_shown++; // Increment to prevent printing ellipsis again
+        }
     }
 }
 
@@ -574,9 +587,12 @@ void finalize_error_block_(ParseState *state)
     }
     if (state->print_function)
     {
-        printF("Source (%s):\n", state->error_filename);
-        print_source_function(state->error_filename, state->error_function_name, state->error_line_number);
-        printF("\n");
+        printF("Source (%s:%d)\n", state->error_filename, state->error_line_number);
+        if(app_config.print_source || app_config.verbose)
+        {
+            print_source_function(state->error_filename, state->error_function_name, state->error_line_number);
+            printF("\n");
+        }
     }
     // Reset state for the next block (or end of file)
     state->in_error_block = false;
@@ -611,23 +627,28 @@ void process_summary_lines_(const char *line_content, ParseState *state)
 
     if (strstr(line_content, "LEAK SUMMARY:"))
     {
-        print_leak_summary_header();
+        if(app_config.print_leak_summary || app_config.verbose)
+            print_leak_summary_header();
     }
     else if (strstr(line_content, "definitely lost:"))
     {
-        print_leak_summary_line(line_content, "Definitely Lost");
+        if(app_config.print_leak_summary || app_config.verbose)
+            print_leak_summary_line(line_content, "Definitely Lost");
     }
     else if (strstr(line_content, "indirectly lost:"))
     {
-        print_leak_summary_line(line_content, "Indirectly Lost");
+        if(app_config.print_leak_summary || app_config.verbose)
+            print_leak_summary_line(line_content, "Indirectly Lost");
     }
     else if (strstr(line_content, "possibly lost:"))
     {
-        print_leak_summary_line(line_content, "Possibly Lost");
+        if(app_config.print_leak_summary || app_config.verbose)
+            print_leak_summary_line(line_content, "Possibly Lost");
     }
     else if (strstr(line_content, "still reachable:"))
     {
-        print_leak_summary_line(line_content, "Still Reachable");
+        if(app_config.print_leak_summary || app_config.verbose)
+            print_leak_summary_line(line_content, "Still Reachable");
     }
     else if (strstr(line_content, "ERROR SUMMARY:"))
     {

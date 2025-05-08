@@ -400,9 +400,7 @@ TEST(PrintErrorHeader, PrintsCorrectFormatWithNewline)
     ParseState state = { .error_count = 0 }; // Initialize ParseState
     const char* expected_output =
         "----------------------------------------\n"
-        "[ERROR #1] Invalid read of size 4\n"
-        "----------------------------------------\n"
-        "Call Stack:\n";
+        "[ERROR #1] Invalid read of size 4\n";
 
     // Call the function - CppUTest captures stdout automatically
     print_error_header(error_input, &state);
@@ -421,9 +419,7 @@ TEST(PrintErrorHeader, PrintsCorrectFormatWithoutNewline)
     ParseState state = { .error_count = 0 }; // Initialize ParseState
     const char* expected_output =
         "----------------------------------------\n"
-        "[ERROR #1] Mismatched free() / delete / delete[]\n" // Newline added by function
-        "----------------------------------------\n"
-        "Call Stack:\n";
+        "[ERROR #1] Mismatched free() / delete / delete[]\n"; // Newline added by function
 
     // Call the function - CppUTest captures stdout automatically
     print_error_header(error_input, &state);
@@ -442,9 +438,7 @@ TEST(PrintErrorHeader, HandlesEmptyErrorString)
     ParseState state = { .error_count = 0 }; // Initialize ParseState
     const char* expected_output =
         "----------------------------------------\n"
-        "[ERROR #1] \n" // Newline added by function
-        "----------------------------------------\n"
-        "Call Stack:\n";
+        "[ERROR #1] \n"; // Newline added by function
 
     // Call the function - CppUTest captures stdout automatically
     print_error_header(error_input, &state);
@@ -461,9 +455,7 @@ TEST(PrintErrorHeader, HandlesInputWithFormatSpecifiers)
     ParseState state = { .error_count = 0 }; // Initialize ParseState
     const char* expected_output =
         "----------------------------------------\n"
-        "[ERROR #1] Error code %d, message: %s\n" // Specifiers should be printed as-is
-        "----------------------------------------\n"
-        "Call Stack:\n";
+        "[ERROR #1] Error code %d, message: %s\n"; // Specifiers should be printed as-is
 
     // Call the function - Assuming it uses the mocked printBuff via PrintFormated
     print_error_header(error_input, &state);
@@ -484,9 +476,7 @@ TEST(PrintErrorHeader, HandlesLongInputString)
     char expected_output[2048]; // Adjust size if needed
     snprintf(expected_output, sizeof(expected_output),
              "----------------------------------------\n"
-             "[ERROR #1] %s\n" // Add newline since input doesn't have one
-             "----------------------------------------\n"
-             "Call Stack:\n",
+             "[ERROR #1] %s\n", // Add newline since input doesn't have one
              error_input);
 
 
@@ -2508,6 +2498,7 @@ TEST_GROUP(ProcessStackTraceLine)
     {
         // Initialize state before each test
         initialize_parse_state(&test_state); // Use the function we tested previously
+        app_config.print_stack = true; // Enable stack trace printing
 
         // Reset mock states
         mock_is_user_code_return = false;
@@ -2529,6 +2520,7 @@ TEST_GROUP(ProcessStackTraceLine)
 
     void teardown() CPPUTEST_OVERRIDE
     {
+        app_config.print_stack = false; // Reset stack trace printing
         // Clean up output buffer
         free(gBuffer);
         gBuffer = NULL;
@@ -2889,13 +2881,14 @@ TEST(FinalizeErrorBlock, PrintsSourceWhenRequested)
     test_state.user_code_found_for_error = true; // User code was found
     test_state.stack_lines_shown = 3;
     test_state.print_function = true; // Source printing requested
+    app_config.print_source = true; // Ensure config allows printing
     strncpy(test_state.error_filename, "my_file.c", sizeof(test_state.error_filename) - 1);
     test_state.error_filename[sizeof(test_state.error_filename) - 1] = '\0';
     strncpy(test_state.error_function_name, "my_func", sizeof(test_state.error_function_name) - 1);
     test_state.error_function_name[sizeof(test_state.error_function_name) - 1] = '\0';
     test_state.error_line_number = 42;
 
-    const char* expected_header = "Source (my_file.c):\n";
+    const char* expected_header = "Source (my_file.c:42)\n";
     const char* expected_mock_call_output = "--- Mock print_source_function called (my_file.c, my_func, 42) ---\n";
     const char* expected_newline_after = "\n"; // The final newline
 
@@ -2920,6 +2913,8 @@ TEST(FinalizeErrorBlock, PrintsSourceWhenRequested)
     // Check state resets
     CHECK_FALSE(test_state.in_error_block); // LLR 17.5
     CHECK_FALSE(test_state.print_function); // LLR 17.6
+
+    app_config.print_source = false; // Ensure config allows printing
 }
 
 // Test case: User code found, print_function = false
@@ -3192,6 +3187,8 @@ TEST_GROUP(ProcessSummaryLines)
 {
     void setup() CPPUTEST_OVERRIDE
     {
+        app_config.print_leak_summary = true; // Ensure config allows printing
+
         // Reset mock states
         mock_print_leak_summary_header_called = false;
         mock_print_leak_summary_line_called = false;
@@ -3212,6 +3209,7 @@ TEST_GROUP(ProcessSummaryLines)
 
     void teardown() CPPUTEST_OVERRIDE
     {
+        app_config.print_leak_summary = false; // Reset config allows printing
         // Clean up output buffer
         free(gBuffer);
         gBuffer = NULL;

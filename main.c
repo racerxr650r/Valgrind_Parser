@@ -23,19 +23,66 @@
  */ 
 #include "vgp.h"
 
+void parse_command_line(int argc, char *argv[])
+{
+    for(int i = 1; i < argc; i++)
+    {
+        if(argv[i][0] == '-')
+        {
+            switch(argv[i][1])
+            {
+                case 'v':
+                    app_config.verbose = true;
+                    break;
+                case 's':
+                    app_config.print_source = true;
+                    break;
+                case 'l':
+                    app_config.print_leak_summary = true;
+                    break;
+                case 't':
+                    app_config.print_stack = true;
+                    break;
+                case 'h':
+                    printF("Usage: %s [options] <valgrind_log_file>\n", argv[0]);
+                    printF("Options:\n");
+                    printF("  -v : Enable verbose output\n");
+                    printF("  -s : Print source code\n");
+                    printF("  -l : Print leak summary\n");
+                    printF("  -t : Print stack trace\n");
+                    printF("  -h : Show this help message\n");
+                    exit(EXIT_SUCCESS);
+                default:
+                    fprintf(stderr, "Unknown option: %s\n", argv[i]);
+                    exit(EXIT_FAILURE);
+            }
+        }
+        else
+        {
+            if(!app_config.log_file)
+                app_config.log_file = argv[i];
+            else
+            {
+                fprintf(stderr, "Multiple log files specified: %s and %s\n", app_config.log_file, argv[i]);
+                exit(EXIT_FAILURE);
+            }
+        }
+    }
+    if(!app_config.log_file)
+    {
+        fprintf(stderr, "No log file specified. Use -h for help.\n");
+        exit(EXIT_FAILURE);
+    }
+}
+
 // --- Main Entry Point ---
 int main(int argc, char *argv[])
 {
     setlocale(LC_NUMERIC, "");
-    
-    if (argc != 2)
-    {
-        printF("Usage: %s <valgrind_log_file>\n", argv[0]);
-        printF("Parses a Valgrind log and shows the call stack and source code for the functions with errors.\n");
-        return EXIT_FAILURE;
-    }
 
-    const char *filename = argv[1];
+    parse_command_line(argc, argv); // Parse command line arguments
+
+    const char *filename = app_config.log_file;
     FILE *file = fopen(filename, "r");
     if (!file)
     {
@@ -44,12 +91,10 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    printF("--- Valgrind Log Summary ---\n");
-    printF("Parsing Log File: %s\n", filename);
+    printF("Parsing Valgrind Log File: %s\n", filename);
 
     process_log_file(file); // Call the main processing function
 
     fclose(file);
-    printF("\n--- End of Summary ---\n");
     return EXIT_SUCCESS;
 }

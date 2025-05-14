@@ -53,3 +53,5 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+test_vgp.cpp.gcov
+vgp.c.gcov

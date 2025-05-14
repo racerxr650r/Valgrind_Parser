@@ -55,13 +55,13 @@ CC = gcc
 # C++ compiler command
 CXX = g++
 # Build flags for c files
-CFLAGS = -g -I/usr/local/include -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wredundant-decls -Wno-long-long -Wno-parentheses -DNCURSES_WIDECHAR=1 -MMD -MP -std=c99
+CFLAGS = -g -I/usr/local/include -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wredundant-decls -Wno-long-long -Wno-parentheses -fprofile-arcs -ftest-coverage -DNCURSES_WIDECHAR=1 -MMD -MP -std=c99
 # Build flags for c files
 CXXFLAGS = -g -I/usr/local/include -I/usr/local/include/CppUTest -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wredundant-decls -Wno-long-long -Wno-parentheses -DNCURSES_WIDECHAR=1 -MMD -MP
 # Debug flags for c files
 DFLAGS = -g3 -fsanitize=address -I/usr/local/include -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wredundant-decls -Wno-long-long -Wno-parentheses -DNCURSES_WIDECHAR=1 -MMD -MP -std=c99
 # Linker Flags
-LDFLAGS = -L/usr/local/lib -lCppUTest -lCppUTestExt
+LDFLAGS = -L/usr/local/lib -lCppUTest -lCppUTestExt -lgcov
 #-lncursesw
 # Application command line options
 OPTIONS = -c -v
@@ -74,13 +74,18 @@ all:		build $(BUILD_DIR)/$(APP_TARGET)
 test:		build $(BUILD_DIR)/$(UNIT_TEST_TARGET) $(BUILD_DIR)/$(INTEGRATION_TEST_TARGET) $(BUILD_DIR)/$(APP_TARGET)
 	@echo "Running unit tests..."
 	$(BUILD_DIR)/$(UNIT_TEST_TARGET) $(OPTIONS)
+#	gcov $(BUILD_DIR)/vgp
+	lcov --branch-coverage --capture --directory $(BUILD_DIR) --output-file $(BUILD_DIR)/coverage.info --ignore-errors mismatch
+	genhtml $(BUILD_DIR)/coverage.info --branch-coverage --output-directory $(BUILD_DIR)/coverage
 	@echo "Running integration tests..."
 	valgrind --leak-check=full --log-file=$(BUILD_DIR)/$(VALGRIND.OUT) --fullpath-after=string $(BUILD_DIR)/$(INTEGRATION_TEST_TARGET) >> $(BUILD_DIR)/$(INTEGRATION_TEST.OUT)
-	$(BUILD_DIR)/$(APP_TARGET) -v $(BUILD_DIR)/$(VALGRIND.OUT) > $(BUILD_DIR)/$(VGP.OUT)
+	valgrind --leak-check=full --log-file=$(BUILD_DIR)/integration_test_valgrind.out --fullpath-after=string $(BUILD_DIR)/$(APP_TARGET) -v $(BUILD_DIR)/$(VALGRIND.OUT) > $(BUILD_DIR)/$(VGP.OUT)
 
 # Create the build directory
 build:
 	mkdir -p $(BUILD_DIR)
+	mkdir -p $(BUILD_DIR)/cppcheck
+	mkdir -p $(BUILD_DIR)/coverage
 
 # Build the app from the object files
 $(BUILD_DIR)/$(APP_TARGET): $(APP_OBJ) $(COMMON_OBJS)
@@ -126,10 +131,22 @@ uninstall:
 	sudo rm -f $(BINDIR)/$(APP_TARGET)
 	sudo rm -f $(MANDIR)/$(APP_TARGET).1
 
+# Determine the code complexity
+complexity:
+	complexity -H -h -c --threshold=0 $(APP_SRC) $(COMMON_SRC)
+
+# SLOC Count
+sloc: build
+	sloccount --personcost 100000 --datadir ./build .
+
+# static code analysis
+analyze: build
+	cppcheck -v --std=c99 --platform=avr8 --library=avr.cfg --max-ctu-depth=10 --cppcheck-build-dir=$(BUILD_DIR)/cppcheck --language=c --inconclusive -I . $(APP_SRC) $(COMMON_SRC)
+
 # Install prereqeuisites
 prereqs:
 	sudo apt update
-	sudo apt install libncurses5-dev libncursesw5-dev
+	sudo apt install -y build-essential cpputest libcpputest-dev libcpputest-doc libcpputest0 libcpputest0-dev libcpputest0-doc libcpputest0-dbg libcpputest0-dbg-doc libcpputest0-dbg-dev libcpputest0-dbg-doc-dev lcov gcov valgrind sloccount complexity cppcheck
 
 # Clean up all generated files
 clean:

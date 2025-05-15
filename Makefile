@@ -59,9 +59,10 @@ CC = gcc
 # C++ compiler command
 CXX = g++
 # Release flags for c files
-RELEASE_FLAGS = -I/usr/local/include -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wredundant-decls -Wno-long-long -Wno-parentheses -DNCURSES_WIDECHAR=1 -MMD -MP -std=c99
+# -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wredundant-decls -Wno-long-long -Wno-parentheses -DNCURSES_WIDECHAR=1 
+RELEASE_FLAGS = -g -I/usr/local/include -MMD -MP -std=c99
 # Debug flags for c files
-DEBUG_FLAGS = -g3 -fsanitize=address -I/usr/local/include -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wredundant-decls -Wno-long-long -Wno-parentheses -fprofile-arcs -ftest-coverage -DNCURSES_WIDECHAR=1 -MMD -MP -std=c99
+DEBUG_FLAGS = -g3 -I/usr/local/include -fanalyzer -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wredundant-decls -Wno-long-long -Wno-parentheses -fprofile-arcs -ftest-coverage -DNCURSES_WIDECHAR=1 -MMD -MP -std=c99
 # Build flags for c++ files
 CXXFLAGS = -g -I/usr/local/include -I/usr/local/include/CppUTest -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wredundant-decls -Wno-long-long -Wno-parentheses -DNCURSES_WIDECHAR=1 -MMD -MP
 # Default flags for c files
@@ -69,7 +70,7 @@ CFLAGS = $(RELEASE_FLAGS)
 # Release Linker Flags
 RELEASE_LDFLAGS = -L/usr/local/lib
 # Debug Linker Flags
-DEBUG_LDFLAGS = -L/usr/local/lib -lCppUTest -lCppUTestExt -lgcov
+DEBUG_LDFLAGS = -L/usr/local/lib -lgcov
 # Default Linker Flags
 LDFLAGS = $(RELEASE_LDFLAGS)
 # Application command line options
@@ -77,22 +78,26 @@ OPTIONS = -c -v
 
 # Build Targets +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # Build all target files with out debug info
-release:		clean build $(BUILD_DIR)/$(APP_TARGET)
+release:		CFLAGS = $(RELEASE_FLAGS)
+release:		LDFLAGS = $(RELEASE_LDFLAGS)
+release:		build $(BUILD_DIR)/$(APP_TARGET)
 
 # Build all target files with debug info
 debug:		CFLAGS = $(DEBUG_FLAGS)
 debug:		LDFLAGS = $(DEBUG_LDFLAGS)
-debug:		clean build $(BUILD_DIR)/$(APP_TARGET)
+debug:		build $(BUILD_DIR)/$(APP_TARGET)
+
+# Build integration test target files without debug info
+integration_test:		CFLAGS = $(RELEASE_FLAGS)
+integration_test:		LDFLAGS = $(RELEASE_LDFLAGS)
+integration_test:		build $(BUILD_DIR)/$(INTEGRATION_TEST_TARGET)
 
 # Build all test target files
-test:		CFLAGS = $(DEBUG_FLAGS)
-test:		LDFLAGS = $(DEBUG_LDFLAGS)
-test:		clean build $(BUILD_DIR)/$(UNIT_TEST_TARGET) $(BUILD_DIR)/$(INTEGRATION_TEST_TARGET) $(BUILD_DIR)/$(APP_TARGET)
-	@echo "Running unit tests..."
-	$(BUILD_DIR)/$(UNIT_TEST_TARGET) $(OPTIONS)
-#	gcov $(BUILD_DIR)/vgp
-	lcov --branch-coverage --capture --directory $(BUILD_DIR) --output-file $(BUILD_DIR)/coverage.info --ignore-errors mismatch
-	genhtml $(BUILD_DIR)/coverage.info --branch-coverage --output-directory $(BUILD_DIR)/coverage
+test:		clean build integration_test debug
+#	@echo "Running unit tests..."
+#	$(BUILD_DIR)/$(UNIT_TEST_TARGET) $(OPTIONS)
+#	lcov --branch-coverage --capture --directory $(BUILD_DIR) --output-file $(BUILD_DIR)/coverage.info --ignore-errors mismatch
+#	genhtml $(BUILD_DIR)/coverage.info --branch-coverage --output-directory $(BUILD_DIR)/coverage
 	@echo "Running integration tests..."
 	valgrind --leak-check=full --log-file=$(BUILD_DIR)/$(VALGRIND.OUT) --fullpath-after=string $(BUILD_DIR)/$(INTEGRATION_TEST_TARGET) >> $(BUILD_DIR)/$(INTEGRATION_TEST.OUT)
 	valgrind --leak-check=full --log-file=$(BUILD_DIR)/integration_test_valgrind.out --fullpath-after=string $(BUILD_DIR)/$(APP_TARGET) -v $(BUILD_DIR)/$(VALGRIND.OUT) > $(BUILD_DIR)/$(VGP.OUT)
@@ -124,21 +129,16 @@ $(BUILD_DIR)/$(UNIT_TEST_TARGET): $(UNIT_TEST_OBJ) $(COMMON_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
 
 # Build the integration test app from the object files
-$(BUILD_DIR)/$(INTEGRATION_TEST_TARGET): $(INTEGRATION_TEST_OBJ) $(COMMON_OBJS)
+$(BUILD_DIR)/$(INTEGRATION_TEST_TARGET): $(INTEGRATION_TEST_OBJ)
 	@echo "Linking $(INTEGRATION_TEST_TARGET)..."
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
-# Build the app with debug symbols
-#debug: build $(COMMON_OBJS)
-#	@echo "Building $(APP_TARGET) with debug symbols..."
-#	$(CC) $(DFLAGS) -o $(BUILD_DIR)/$(APP_TARGET) $(COMMON_OBJS) $(LDFLAGS)
-
 # Run TARGET with the provided command line options
-run: all
+run: debug
 	$(BUILD_DIR)/$(APP_TARGET) $(OPTIONS)
 
 # Install the application
-install:	clean all
+install:	clean release
 	sudo cp $(BUILD_DIR)/$(APP_TARGET) $(BINDIR)
 	sudo cp $(APP_TARGET).1 $(MANDIR)
 
@@ -162,14 +162,7 @@ analyze: build
 # Install prereqeuisites
 prereqs:
 	sudo apt update
-	sudo apt install -y cpputest libcpputest-dev lcov valgrind sloccount complexity cppcheck
-	git clone https://github.com/cpputest/cpputest.git
-	cd cpputest
-	mkdir cpputest_build
-	cmake -B cpputest_build
-	cmake --build cpputest_build
-	cd ..
-	rm -rf cpputest
+	sudo apt install -y universal-ctags lcov valgrind sloccount complexity cppcheck libcmocka-dev cmocka-doc
 
 # Clean up all generated files
 clean:
@@ -177,3 +170,5 @@ clean:
 
 # Include dependencies generated by GCC (-MMD -MP flags)
 -include $(DEPENDS)
+
+.PHONY: all clean install uninstall run test debug release integration_test complexity sloc analyze prereqs

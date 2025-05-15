@@ -49,30 +49,9 @@ const char *ERROR_KEYWORDS[] = {
     NULL
 };
 
-// --- Function Pointers for mocking ---
-int (*printF)(const char*, ...) = printf;
-FILE* (*Fopen)(const char *pathname, const char *mode) = fopen;
-bool (*find_function_start_and_brace)(FILE *file, const char *function_name, int target_line, int *out_def_line, int *out_brace_line) = find_function_start_and_brace_;
-void (*print_function_body)(FILE *file, int start_print_line, int brace_start_line, int highlight_line) = print_function_body_;
-void (*print_error_header)(const char *error_type, ParseState *state) = print_error_header_;
-bool (*is_user_code_stack_trace)(const char *line) = is_user_code_stack_trace_;
-char* (*get_function_name)(const char *line, char *newline) = get_function_name_;
-bool (*extract_file_and_line)(const char *line, char *filename, char *function_name, int *line_number) = extract_file_and_line_;
-void (*print_source_function)(const char *filename, const char *function_name, int line_number) = print_source_function_;
-void (*process_stack_trace_line)(const char *line_content, ParseState *state) = process_stack_trace_line_;
-void (*finalize_error_block)(ParseState *state) = finalize_error_block_;
-void (*print_leak_summary_header)(void) = print_leak_summary_header_;
-void (*print_leak_summary_line)(const char *line, const char *leak_type) = print_leak_summary_line_;
-void (*print_final_error_summary)(const char *line, ParseState *state) = print_final_error_summary_;
-void (*initialize_parse_state)(ParseState *state) = initialize_parse_state_;
-char* (*strip_valgrind_pid_prefix)(char *line) = strip_valgrind_pid_prefix_;
-void (*process_in_error_block)(const char *line_content, ParseState *state) = process_in_error_block_;
-bool (*check_start_new_error)(const char *line_content, ParseState *state) = check_start_new_error_;
-void (*process_summary_lines)(const char *line_content, ParseState *state) = process_summary_lines_;
-
 // --- Helper Functions ---
 // Checks if a line is likely part of a user code stack trace.
-bool is_user_code_stack_trace_(const char *line)
+bool is_user_code_stack_trace(const char *line)
 {
     // Check for stack trace indentation
     if (strncmp(line, "   at ", 6) != 0 && strncmp(line, "   by ", 6) != 0)
@@ -108,7 +87,7 @@ bool is_user_code_stack_trace_(const char *line)
 }
 
 // Removes the Valgrind PID prefix from a line.
-char *strip_valgrind_pid_prefix_(char *line)
+char *strip_valgrind_pid_prefix(char *line)
 {
     // Locate the first occurrence of "=="
     char *prefix_end = strstr(line, "==");
@@ -147,14 +126,14 @@ char *strip_valgrind_pid_prefix_(char *line)
 }
 
 // Get just the function name, filename, and line number from a Valgrind stack trace line
-char *get_function_name_(const char *line, char *newline)
+char *get_function_name(const char *line, char *newline)
 {
     char function[MAX_LINE_LENGTH] = "?";
     char filename[MAX_LINE_LENGTH] = "?";
     int line_number = 0;
     int length = strlen(line);
     
-    sscanf(line,"%*s %*s %[^ ] (%[^:]:%d)",function, filename, &line_number);
+    sscanf(line,"%*s %*s %[^ ] (%[^:]:%d)",(char *)function, (char *)filename, &line_number);
 
     if(line_number)
         snprintf(newline,length,"%s(%s:%d)\n",function,basename(filename),line_number);
@@ -165,64 +144,62 @@ char *get_function_name_(const char *line, char *newline)
 }
 
 // Prints an error block header.
-void print_error_header_(const char *error_type, ParseState *state)
+void print_error_header(const char *error_type, ParseState *state)
 {
-    printF("----------------------------------------\n");
-    printF("[ERROR #%d] ", ++state->error_count);
+    printf("----------------------------------------\n");
+    printf("[ERROR #%d] ", ++state->error_count);
     if(error_type[strlen(error_type) - 1] == '\n')
-        printF("%s", error_type);
+        printf("%s", error_type);
     else
-        printF("%s\n", error_type);
+        printf("%s\n", error_type);
     if(app_config.print_stack || app_config.verbose)
-        printF("Call Stack:\n");
+        printf("Call Stack:\n");
 }
 
 // Prints a leak summary header.
-void print_leak_summary_header_(void)
+void print_leak_summary_header(void)
 {
-    printF("\n--- LEAK SUMMARY ---\n");
+    printf("\n--- LEAK SUMMARY ---\n");
 }
 
 // Prints a leak summary line.
-void print_leak_summary_line_(const char *line, const char *leak_type)
+void print_leak_summary_line(const char *line, const char *leak_type)
 {
     int bytes = 0, blocks = 0;
-    //if (sscanf(line, "%*[^:]: %d bytes in %d blocks", &bytes, &blocks) == 2)
     if (sscanf(line, "%*[^:]: %'d %*s %*s %'d", &bytes, &blocks) == 2)
     {
-        printF("* %s: %d bytes in %d blocks\n", leak_type, bytes, blocks);
+        printf("* %s: %d bytes in %d blocks\n", leak_type, bytes, blocks);
     }
     else
     {
         if(line[strlen(line) - 1] == '\n')
-            printF("%s", line); // Print raw if parse fails
+            printf("%s", line); // Print raw if parse fails
         else
-            printF("%s\n", line); // Print raw if parse fails
+            printf("%s\n", line); // Print raw if parse fails
     }
 }
 
 // Prints the final error count summary.
-void print_final_error_summary_(const char *line, ParseState *state)
+void print_final_error_summary(const char *line, ParseState *state)
 {
     int error_count = 0;
-    //if (sscanf(line, "ERROR SUMMARY: %d errors", &error_count) == 1)
     if (sscanf(line, "%*[^:]: %'d", &error_count) == 1)
     {
-        printF("\n--- FINAL COUNTS ---\n");
-        printF("* Total Errors: %d\n", state->error_count);
-        printF("* Possible Leaks: %d\n", error_count - state->error_count);
+        printf("\n--- FINAL COUNTS ---\n");
+        printf("* Total Errors: %d\n", state->error_count);
+        printf("* Possible Leaks: %d\n", error_count - state->error_count);
     }
     else
     {
         if(line[strlen(line) - 1] == '\n')
-            printF("%s", line); // Print raw if parse fails
+            printf("%s", line); // Print raw if parse fails
         else
-            printF("%s\n", line); // Print raw if parse fails
+            printf("%s\n", line); // Print raw if parse fails
     }
 }
 
 // Extracts the filename, function name, and line number from a stack trace line.
-bool extract_file_and_line_(const char *line, char *filename, char *function_name, int *line_number)
+bool extract_file_and_line(const char *line, char *filename, char *function_name, int *line_number)
 {
     if(line == NULL || filename == NULL || function_name == NULL || line_number == NULL)
     {
@@ -232,7 +209,7 @@ bool extract_file_and_line_(const char *line, char *filename, char *function_nam
     char temp_filename[MAX_LINE_LENGTH];
     char temp_function[MAX_LINE_LENGTH];
     // Attempt to parse the line with function name
-    if (sscanf(line, "%*[^:]: %[^(]( %[^:]:%d)", temp_function, temp_filename, line_number) == 3)
+    if (sscanf(line, "%*[^:]: %[^(]( %[^:]:%d)", (char *)temp_function, (char *)temp_filename, line_number) == 3)
     {
         char *filename_ptr = strtok(temp_filename, " \t"); // Remove leading whitespace
         filename_ptr = strtok(filename_ptr, " \t"); // Remove trailing whitespace
@@ -244,14 +221,14 @@ bool extract_file_and_line_(const char *line, char *filename, char *function_nam
         return true;
     }
     // Attempt to parse the line without function name
-    else if (sscanf(line, "%*[^:]: %[^:]:%d", temp_filename, line_number) == 2)
+    else if (sscanf(line, "%*[^:]: %[^:]:%d", (char *)temp_filename, line_number) == 2)
     {
         strcpy(filename, temp_filename); // Fallback if basename fails
         strcpy(function_name, ""); // No function name available
         return true;
     }
     // Attempt to parse a line without line number
-    else if (sscanf(line, "%*[^:]: %[^(](in %[^)])", temp_function, temp_filename) == 2)
+    else if (sscanf(line, "%*[^:]: %[^(](in %[^)])", (char *)temp_function, (char *)temp_filename) == 2)
     {
         char *filename_ptr = strtok(temp_filename, " \t"); // Remove leading whitespace
         filename_ptr = strtok(filename_ptr, " \t"); // Remove trailing whitespace
@@ -267,240 +244,125 @@ bool extract_file_and_line_(const char *line, char *filename, char *function_nam
     return false;
 }
 
-// Checks if a character is valid in a function name.
-bool is_valid_function_char(char c)
+// Function to execute a shell command and capture its output
+bool execute_command(const char *command, char *output, size_t output_size)
 {
-    return isalnum((unsigned char)c) || c == '_'; // Added unsigned char cast for safety
-}
-
-// Helper to find the line containing the function definition and the opening brace
-// Returns true if found and target_line is potentially within this function.
-bool find_function_start_and_brace_(FILE *file, const char *function_name, int target_line,
-                                   int *out_def_line, int *out_brace_line)
-{
-    if(file == NULL || function_name == NULL || out_def_line == NULL || out_brace_line == NULL)
+    if (command == NULL || output == NULL || output_size == 0)
         return false; // Invalid arguments
 
-    char line[MAX_SOURCE_LINE_LENGTH];
-    int current_line = 1;
-    int potential_def_line = -1;
-    *out_def_line = -1;
-    *out_brace_line = -1;
-    bool function_name_found = false;
+    FILE *fp = popen(command, "r");
 
-    rewind(file);
-    while (fgets(line, sizeof(line), file) != NULL)
+    if (fp == NULL)
     {
-        // If we haven't found the function name yet, look for it
-        if (!function_name_found)
-        {
-            char potential_name[MAX_LINE_LENGTH] = "";
-            char *paren_start = strchr(line, '(');
-            if (paren_start != NULL)
-            {
-                char *name_end = paren_start - 1;
-                // Skip trailing whitespace before parenthesis
-                while (name_end >= line && isspace((unsigned char)*name_end)) {
-                    name_end--;
-                }
-                char *name_start = name_end;
-                 // Move backwards to find the start of the potential function name
-                while (name_start >= line && is_valid_function_char(*name_start)) {
-                    name_start--;
-                }
-                name_start++; // Move one forward to the actual start of the function name
-
-                // Extract the potential function name if valid characters were found
-                if (name_start <= name_end) {
-                    int len = name_end - name_start + 1;
-                    if (len < MAX_LINE_LENGTH) {
-                        strncpy(potential_name, name_start, len);
-                        potential_name[len] = '\0';
-
-                        // Check if the extracted name matches the target function name
-                        if (strcmp(potential_name, function_name) == 0)
-                        {
-                            function_name_found = true;
-                            potential_def_line = current_line; // Found the line with name(...)
-                        }
-                    }
-                }
-            }
-        }
-
-        // If we found the function name line, look for the opening brace '{' on subsequent lines
-        if (function_name_found)
-        {
-            if (strchr(line, '{') != NULL)
-            {
-                // Found the opening brace. Check if target line is plausible.
-                // The target line must be at or after the definition line.
-                if (target_line >= potential_def_line) {
-                    *out_def_line = potential_def_line;
-                    *out_brace_line = current_line; // Line containing the '{'
-                    return true; // Found definition and opening brace
-                } else {
-                    // Target line is before this function definition line, reset search
-                    // This might happen if there are multiple functions with the same name.
-                    function_name_found = false;
-                    potential_def_line = -1;
-                }
-            }
-        }
-        current_line++;
+        perror("popen");
+        return false;
     }
-    return false; // Reached EOF without finding suitable function/brace
+
+    if (fgets(output, output_size, fp) == NULL)
+    {
+        if (ferror(fp))
+        {
+            perror("fgets");
+            pclose(fp);
+            return false;
+        }
+    }
+
+    pclose(fp);
+    return true;
 }
 
-// Helper to print the function body, tracking braces
-void print_function_body_(FILE *file, int start_print_line, int brace_start_line, int highlight_line)
+bool parse_ctags_output(const char *ctags_output, int *start_line, int *end_line)
 {
-    if(file == NULL || start_print_line <= 0 || brace_start_line <= 0 || highlight_line < 0)
-        return; // Invalid file pointer
-
-    char line[MAX_SOURCE_LINE_LENGTH];
-    int current_line = 1;
-    int brace_count = 0;
-    bool printing = false;
-    bool brace_started = false; // Track if we've seen the first '{'
-    bool highlight_error = false; // Track if the highlight line was printed
-
-    // Check for invalid line numbers
-    rewind(file);
-    while (fgets(line, sizeof(line), file) != NULL)
+    // Check for NULL pointers
+    if (ctags_output == NULL || start_line == NULL || end_line == NULL)
     {
-        if (current_line == start_print_line)
-            printing = true;
-        if (current_line == brace_start_line)
-            brace_started = true;
-        if(current_line == highlight_line && !printing)
-            highlight_error = true;
-        if(brace_started)
-        {
-            for (int i = 0; line[i] != '\0'; i++)
-            {
-                if (line[i] == '{')
-                    brace_count++;
-                else if (line[i] == '}')
-                    brace_count--;
-            }
-            if(brace_count == 0)
-                break;
-        }
-        ++current_line;
+        fprintf(stderr, "Error: Invalid arguments to parse_ctags_output.\n");
+        return false;
     }
 
-    if(!printing || !brace_started || highlight_error)
-        return; // Nothing to print
-
-    current_line = 1; // Reset line number for printing
-    brace_count = 0; // Reset brace count
-    brace_started = false; // Reset brace tracking
-    printing = false; // Reset printing flag
-
-    rewind(file);
-    while (fgets(line, sizeof(line), file) != NULL)
+    // Find the start line
+    char *input = strstr(ctags_output, "line:");
+    if (input == NULL)
     {
-        // Start printing from the line where the function definition was found
-        if (current_line >= start_print_line)
-        {
-            printing = true;
-        }
-
-        if (printing)
-        {
-            // Print line number, highlight marker, and line content
-            printF("%c%4d%c %s",
-                   (current_line == highlight_line) ? '>' : ' ',
-                   current_line,
-                   (current_line == highlight_line) ? '<' : ' ',
-                   line);
-            // Ensure newline if original line didn't have one (important for files without trailing newline)
-            if (line[strlen(line)-1] != '\n') printF("\n");
-
-            // Track braces only from the brace_start_line onwards to find the function end
-            if (current_line >= brace_start_line) {
-                 for (int i = 0; line[i] != '\0'; i++)
-                 {
-                     if (line[i] == '{')
-                     {
-                         if (!brace_started) brace_started = true;
-                         brace_count++;
-                     }
-                     else if (line[i] == '}')
-                     {
-                         brace_count--;
-                     }
-                 }
-                 // Stop printing after the line containing the final closing brace
-                 // This handles cases where the closing brace is on the same line as other code.
-                 if (brace_started && brace_count <= 0)
-                 {
-                     break;
-                 }
-            }
-        }
-        current_line++;
-
-        // Safety break: Prevent excessively long printing if brace matching fails
-        if (printing && current_line > start_print_line + 5000)
-        {
-             printF("\nWarning: Stopped printing function body after 5000 lines (possible brace mismatch in '%s'?)\n", "source file"); // Filename not available here easily
-             break;
-        }
+        fprintf(stderr, "Error: Invalid ctags output format.\n");
+        return false;
     }
-    if (brace_count > 0 && current_line <= start_print_line + 5000)
-        printF("\nWarning: Reached EOF while printing function body, brace level indicates mismatch (%d).\n", brace_count);
+    sscanf(input, "line:%d", start_line);
+
+    // Find the end line
+    input = strstr(input, "end:");
+    if (input == NULL)
+    {
+        fprintf(stderr, "Error: Invalid ctags output format.\n");
+        return false;
+    }
+    sscanf(input, "end:%d", end_line);
+
+    // Check if the start and end lines are valid
+    if (*start_line <= 0 || *end_line <= 0 || *start_line >= *end_line)
+    {
+        fprintf(stderr, "Error: Invalid line range in ctags output (start: %d, end: %d).\n", *start_line, *end_line);
+        return false;
+    }
+    return true;
 }
 
 // Prints the source code of the entire function containing the given line number.
-void print_source_function_(const char *filename, const char *function_name, int line_number)
+void print_source_function(const char *source_file, const char *function_name, int line_number)
 {
-    // Handle case where function name might be empty
-    if (function_name == NULL || function_name[0] == '\0') {
-        // Use fprintf to stderr for warnings/errors
-        printF("Warning: Cannot print source for line %d in '%s': Function name not extracted from Valgrind log.\n", line_number, filename);
-        return;
-    }
-     if (line_number <= 0) {
-        printF("Warning: Cannot print source for function '%s' in '%s': Invalid line number (%d) extracted.\n", function_name, filename, line_number);
-        return;
-    }
+    char command[MAX_LINE_LENGTH];
+    char ctags_output[MAX_LINE_LENGTH];
+    int start_line = 0, end_line = 0;
 
-    FILE *source_file = Fopen(filename, "r");
-    if (!source_file)
+    // Generate ctags command to find the function's start and end lines
+    snprintf(command, sizeof(command),
+             "ctags -o - --c-kinds=f --fields=+ne %s | grep '^%s'", source_file, function_name);
+
+    if (!execute_command(command, ctags_output, sizeof(ctags_output))) 
     {
-        printF("Error: Failure opening source file '%s': %s\n", filename, strerror(errno));
+        fprintf(stderr, "Error: Could not find function '%s' in file '%s'.\n", function_name, source_file);
         return;
     }
 
-    int function_def_line = -1;
-    int function_brace_line = -1;
-
-    // Find the start of the function definition and its opening brace
-    bool found = find_function_start_and_brace(source_file, function_name, line_number,
-                                               &function_def_line, &function_brace_line);
-
-    if (found)
+    // Parse the ctags output to extract the start and end lines
+    if (!parse_ctags_output(ctags_output, &start_line, &end_line))
     {
-        // Print the function body
-        print_function_body(source_file, function_def_line, function_brace_line, line_number);
-    }
-    else
-    {
-        // Provide a more specific warning based on whether the function name was found but the line number was outside,
-        // or the function name itself wasn't found. (Current helper doesn't easily distinguish this, needs more state return)
-        printF("Warning: Could not locate function '%s' near line %d in file '%s'.\n",
-               function_name, line_number, filename);
-        printF("         (Check if function name or line number from Valgrind log is correct and file wasn't modified.)\n");
+        fprintf(stderr, "Error: Failed to parse ctags output for function '%s'.\n", function_name);
+        return;
     }
 
-    fclose(source_file);
+    if (start_line <= 0 || ++end_line <= 0 || start_line > end_line)
+    {
+        fprintf(stderr, "Error: Invalid line range for function '%s' (start: %d, end: %d).\n",
+                function_name, start_line, end_line);
+        return;
+    }
+
+    // Open the source file to extract the function's code
+    FILE *file = fopen(source_file, "r");
+    if (file == NULL)
+    {
+        perror("fopen");
+        return;
+    }
+
+    char line[MAX_LINE_LENGTH];
+    int current_line = 1;
+
+    // Forward to the start line
+    while (current_line++ < start_line && fgets(line, sizeof(line), file));
+
+    // Print the function's code with line number and offending line marked from start to end line
+    while (current_line++ <= end_line && fgets(line, sizeof(line), file)) 
+        printf("%c%4d %s", current_line==line_number?'>':' ', current_line, line);
+
+    fclose(file);
 }
 
 // --- Core Parsing Logic ---
 // Initializes the parsing state
-void initialize_parse_state_(ParseState *state)
+void initialize_parse_state(ParseState *state)
 {
     if(state != NULL)
     {
@@ -517,7 +379,7 @@ void initialize_parse_state_(ParseState *state)
 }
 
 // Checks if the line marks the start of a new error block
-bool check_start_new_error_(const char *line_content, ParseState *state)
+bool check_start_new_error(const char *line_content, ParseState *state)
 {
     if (line_content == NULL || state == NULL)
         return false; // Invalid arguments
@@ -543,7 +405,7 @@ bool check_start_new_error_(const char *line_content, ParseState *state)
 }
 
 // Processes a line identified as part of a stack trace
-void process_stack_trace_line_(const char *line_content, ParseState *state)
+void process_stack_trace_line(const char *line_content, ParseState *state)
 {
     if(line_content == NULL || state == NULL)
         return; // Invalid arguments
@@ -553,7 +415,7 @@ void process_stack_trace_line_(const char *line_content, ParseState *state)
         char stack_entry[MAX_LINE_LENGTH];
         if(app_config.print_stack || app_config.verbose)
         {
-            printF("  - %s", get_function_name((const char*)line_content, stack_entry)); // Cast needed for get_function_name prototype
+            printf("  - %s", get_function_name((const char*)line_content, stack_entry)); // Cast needed for get_function_name prototype
             state->stack_lines_shown++;
         }
 
@@ -569,29 +431,29 @@ void process_stack_trace_line_(const char *line_content, ParseState *state)
         if(app_config.print_stack || app_config.verbose)
         {
             // Print ellipsis only once after context lines if no user code found yet
-            printF("  - ...\n");
+            printf("  - ...\n");
             state->stack_lines_shown++; // Increment to prevent printing ellipsis again
         }
     }
 }
 
 // Finalizes the processing of an error block (prints source, resets state)
-void finalize_error_block_(ParseState *state)
+void finalize_error_block(ParseState *state)
 {
     if (state == NULL)
         return; // Invalid arguments
 
     if (!state->user_code_found_for_error && state->stack_lines_shown > 0)
     {
-        printF("  (-> Check stack trace above for user code related to '%s')\n", state->current_error_type);
+        printf("  (-> Check stack trace above for user code related to '%s')\n", state->current_error_type);
     }
     if (state->print_function)
     {
-        printF("Source (%s:%d)\n", state->error_filename, state->error_line_number);
+        printf("Source (%s:%d)\n", state->error_filename, state->error_line_number);
         if(app_config.print_source || app_config.verbose)
         {
             print_source_function(state->error_filename, state->error_function_name, state->error_line_number);
-            printF("\n");
+            printf("\n");
         }
     }
     // Reset state for the next block (or end of file)
@@ -601,7 +463,7 @@ void finalize_error_block_(ParseState *state)
 }
 
 // Processes lines within an active error block
-void process_in_error_block_(const char *line_content, ParseState *state)
+void process_in_error_block(const char *line_content, ParseState *state)
 {
     if (line_content == NULL || state == NULL)
         return; // Invalid arguments
@@ -620,7 +482,7 @@ void process_in_error_block_(const char *line_content, ParseState *state)
 }
 
 // Checks for and processes summary lines (Leak or Final)
-void process_summary_lines_(const char *line_content, ParseState *state)
+void process_summary_lines(const char *line_content, ParseState *state)
 {
     if (line_content == NULL)
         return; // Invalid arguments
@@ -707,6 +569,6 @@ void process_log_file(FILE *file)
     if (state.in_error_block)
     {
         finalize_error_block(&state); // Print source if needed
-        printF("----------------------------------------\n\n"); // Add final separator
+        printf("----------------------------------------\n\n"); // Add final separator
     }
 }

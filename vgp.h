@@ -28,6 +28,10 @@
 #ifndef VGP_H
 #define VGP_H
 
+// Enable POSIX.2-1992 extensions
+// This is needed for popen() and pclose() functions
+#define _POSIX_C_SOURCE 2
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -72,45 +76,22 @@ extern const char *IGNORE_PATHS[];
 extern const char *ERROR_KEYWORDS[];
 
 // --- Function Prototypes For Mocked Functions ---
-extern int (*printF)(const char*, ...);
-extern FILE* (*Fopen)(const char *pathname, const char *mode);
-extern bool (*find_function_start_and_brace)(FILE *file, const char *function_name, int target_line, int *out_def_line, int *out_brace_line);
-extern void (*print_function_body)(FILE *file, int start_print_line, int brace_start_line, int highlight_line);
-extern void (*print_error_header)(const char *error_type, ParseState *state);
-extern bool (*is_user_code_stack_trace)(const char *line);
-extern char* (*get_function_name)(const char *line, char *newline);
-extern bool (*extract_file_and_line)(const char *line, char *filename, char *function_name, int *line_number);
-extern void (*print_source_function)(const char *filename, const char *function_name, int line_number);
-extern void (*process_stack_trace_line)(const char *line_content, ParseState *state);
-extern void (*finalize_error_block)(ParseState *state);
-extern void (*print_leak_summary_header)(void);
-extern void (*print_leak_summary_line)(const char *line, const char *leak_type);
-extern void (*print_final_error_summary)(const char *line, ParseState *state);
-extern void (*initialize_parse_state)(ParseState *state); // Can use real or mock
-extern char* (*strip_valgrind_pid_prefix)(char *line);
-extern void (*process_in_error_block)(const char *line_content, ParseState *state);
-extern bool (*check_start_new_error)(const char *line_content, ParseState *state);
-extern void (*process_summary_lines)(const char *line_content, ParseState *state);
-
-
-void print_function_body_(FILE *file, int start_print_line, int brace_start_line, int highlight_line);
-bool find_function_start_and_brace_(FILE *file, const char *function_name, int target_line, int *out_def_line, int *out_brace_line);
 bool is_valid_function_char(char c);
-char *get_function_name_(const char *line, char *newline);
-void initialize_parse_state_(ParseState *state);
-bool check_start_new_error_(const char *line_content, ParseState *state);
-void process_stack_trace_line_(const char *line_content, ParseState *state);
-void process_in_error_block_(const char *line_content, ParseState *state);
-void process_summary_lines_(const char *line_content, ParseState *state);
-void print_error_header_(const char *error_type, ParseState *state);
-void print_source_function_(const char *filename, const char *function_name, int line_number);
-bool extract_file_and_line_(const char *line, char *filename, char *function_name, int *line_number);
-bool is_user_code_stack_trace_(const char *line);
-char *strip_valgrind_pid_prefix_(char *line);
-void print_leak_summary_header_(void);
-void print_leak_summary_line_(const char *line_content, const char *summary_type);
-void print_final_error_summary_(const char *line_content, ParseState *state);
-void finalize_error_block_(ParseState *state);
+char *get_function_name(const char *line, char *newline);
+void initialize_parse_state(ParseState *state);
+bool check_start_new_error(const char *line_content, ParseState *state);
+void process_stack_trace_line(const char *line_content, ParseState *state);
+void process_in_error_block(const char *line_content, ParseState *state);
+void process_summary_lines(const char *line_content, ParseState *state);
+void print_error_header(const char *error_type, ParseState *state);
+void print_source_function(const char *filename, const char *function_name, int line_number);
+bool extract_file_and_line(const char *line, char *filename, char *function_name, int *line_number);
+bool is_user_code_stack_trace(const char *line);
+char *strip_valgrind_pid_prefix(char *line);
+void print_leak_summary_header(void);
+void print_leak_summary_line(const char *line_content, const char *summary_type);
+void print_final_error_summary(const char *line_content, ParseState *state);
+void finalize_error_block(ParseState *state);
 void process_log_file(FILE *file);
 void print_error_summary(const char *line_content);
 void print_source_line(const char *line_content, int line_number);

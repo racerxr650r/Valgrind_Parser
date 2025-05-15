@@ -44,13 +44,13 @@ void parse_command_line(int argc, char *argv[])
                     app_config.print_stack = true;
                     break;
                 case 'h':
-                    printF("Usage: %s [options] <valgrind_log_file>\n", argv[0]);
-                    printF("Options:\n");
-                    printF("  -v : Enable verbose output\n");
-                    printF("  -s : Print source code\n");
-                    printF("  -l : Print leak summary\n");
-                    printF("  -t : Print stack trace\n");
-                    printF("  -h : Show this help message\n");
+                    printf("Usage: %s [options] <valgrind_log_file>\n", argv[0]);
+                    printf("Options:\n");
+                    printf("  -v : Enable verbose output\n");
+                    printf("  -s : Print source code\n");
+                    printf("  -l : Print leak summary\n");
+                    printf("  -t : Print stack trace\n");
+                    printf("  -h : Show this help message\n");
                     exit(EXIT_SUCCESS);
                 default:
                     fprintf(stderr, "Unknown option: %s\n", argv[i]);
@@ -91,7 +91,7 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    printF("Parsing Valgrind Log File: %s\n", filename);
+    printf("Parsing Valgrind Log File: %s\n", filename);
 
     process_log_file(file); // Call the main processing function
 

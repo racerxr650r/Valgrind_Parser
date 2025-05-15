@@ -88,7 +88,6 @@ void print_source_function(const char *filename, const char *function_name, int 
 bool extract_file_and_line(const char *line, char *filename, char *function_name, int *line_number);
 bool is_user_code_stack_trace(const char *line);
 char *strip_valgrind_pid_prefix(char *line);
-void print_leak_summary_header(void);
 void print_leak_summary_line(const char *line_content, const char *summary_type);
 void print_final_error_summary(const char *line_content, ParseState *state);
 void finalize_error_block(ParseState *state);

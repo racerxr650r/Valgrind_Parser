@@ -156,12 +156,6 @@ void print_error_header(const char *error_type, ParseState *state)
         printf("Call Stack:\n");
 }
 
-// Prints a leak summary header.
-void print_leak_summary_header(void)
-{
-    printf("\n--- LEAK SUMMARY ---\n");
-}
-
 // Prints a leak summary line.
 void print_leak_summary_line(const char *line, const char *leak_type)
 {
@@ -311,6 +305,12 @@ bool parse_ctags_output(const char *ctags_output, int *start_line, int *end_line
 // Prints the source code of the entire function containing the given line number.
 void print_source_function(const char *source_file, const char *function_name, int line_number)
 {
+    if (source_file == NULL || function_name == NULL || line_number <= 0)
+    {
+        fprintf(stderr, "Error: Invalid arguments to print_source_function.\n");
+        return;
+    }
+
     char command[MAX_LINE_LENGTH];
     char ctags_output[MAX_LINE_LENGTH];
     int start_line = 0, end_line = 0;
@@ -490,7 +490,7 @@ void process_summary_lines(const char *line_content, ParseState *state)
     if (strstr(line_content, "LEAK SUMMARY:"))
     {
         if(app_config.print_leak_summary || app_config.verbose)
-            print_leak_summary_header();
+            printf("\n--- LEAK SUMMARY ---\n");
     }
     else if (strstr(line_content, "definitely lost:"))
     {

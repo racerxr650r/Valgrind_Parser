@@ -1,5 +1,9 @@
 # Makefile Targets
-#          all:	compiles the source code
+#      release:	compiles the application source code for release
+#        debug:	compiles the application source code with debug info
+#         test:	compiles the test application with debug symbols and runs
+#				the unit tests, generates code coverage report and runs
+#				the integration test
 #        clean: removes all .hex, .elf, and .o files in the source code and
 #              	library directories
 #      install:	installs the application and documentation
@@ -54,24 +58,36 @@ UDEVDIR = /etc/udev/rules.d
 CC = gcc
 # C++ compiler command
 CXX = g++
-# Build flags for c files
-CFLAGS = -g -I/usr/local/include -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wredundant-decls -Wno-long-long -Wno-parentheses -fprofile-arcs -ftest-coverage -DNCURSES_WIDECHAR=1 -MMD -MP -std=c99
-# Build flags for c files
-CXXFLAGS = -g -I/usr/local/include -I/usr/local/include/CppUTest -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wredundant-decls -Wno-long-long -Wno-parentheses -DNCURSES_WIDECHAR=1 -MMD -MP
+# Release flags for c files
+RELEASE_FLAGS = -I/usr/local/include -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wredundant-decls -Wno-long-long -Wno-parentheses -DNCURSES_WIDECHAR=1 -MMD -MP -std=c99
 # Debug flags for c files
-DFLAGS = -g3 -fsanitize=address -I/usr/local/include -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wredundant-decls -Wno-long-long -Wno-parentheses -DNCURSES_WIDECHAR=1 -MMD -MP -std=c99
-# Linker Flags
-LDFLAGS = -L/usr/local/lib -lCppUTest -lCppUTestExt -lgcov
-#-lncursesw
+DEBUG_FLAGS = -g3 -fsanitize=address -I/usr/local/include -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wredundant-decls -Wno-long-long -Wno-parentheses -fprofile-arcs -ftest-coverage -DNCURSES_WIDECHAR=1 -MMD -MP -std=c99
+# Build flags for c++ files
+CXXFLAGS = -g -I/usr/local/include -I/usr/local/include/CppUTest -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wredundant-decls -Wno-long-long -Wno-parentheses -DNCURSES_WIDECHAR=1 -MMD -MP
+# Default flags for c files
+CFLAGS = $(RELEASE_FLAGS)
+# Release Linker Flags
+RELEASE_LDFLAGS = -L/usr/local/lib
+# Debug Linker Flags
+DEBUG_LDFLAGS = -L/usr/local/lib -lCppUTest -lCppUTestExt -lgcov
+# Default Linker Flags
+LDFLAGS = $(RELEASE_LDFLAGS)
 # Application command line options
 OPTIONS = -c -v
 
 # Build Targets +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# Build all target files
-all:		build $(BUILD_DIR)/$(APP_TARGET)
+# Build all target files with out debug info
+release:		clean build $(BUILD_DIR)/$(APP_TARGET)
+
+# Build all target files with debug info
+debug:		CFLAGS = $(DEBUG_FLAGS)
+debug:		LDFLAGS = $(DEBUG_LDFLAGS)
+debug:		clean build $(BUILD_DIR)/$(APP_TARGET)
 
 # Build all test target files
-test:		build $(BUILD_DIR)/$(UNIT_TEST_TARGET) $(BUILD_DIR)/$(INTEGRATION_TEST_TARGET) $(BUILD_DIR)/$(APP_TARGET)
+test:		CFLAGS = $(DEBUG_FLAGS)
+test:		LDFLAGS = $(DEBUG_LDFLAGS)
+test:		clean build $(BUILD_DIR)/$(UNIT_TEST_TARGET) $(BUILD_DIR)/$(INTEGRATION_TEST_TARGET) $(BUILD_DIR)/$(APP_TARGET)
 	@echo "Running unit tests..."
 	$(BUILD_DIR)/$(UNIT_TEST_TARGET) $(OPTIONS)
 #	gcov $(BUILD_DIR)/vgp
@@ -113,16 +129,16 @@ $(BUILD_DIR)/$(INTEGRATION_TEST_TARGET): $(INTEGRATION_TEST_OBJ) $(COMMON_OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 # Build the app with debug symbols
-debug: build $(COMMON_OBJS)
-	@echo "Building $(APP_TARGET) with debug symbols..."
-	$(CC) $(DFLAGS) -o $(BUILD_DIR)/$(APP_TARGET) $(COMMON_OBJS) $(LDFLAGS)
+#debug: build $(COMMON_OBJS)
+#	@echo "Building $(APP_TARGET) with debug symbols..."
+#	$(CC) $(DFLAGS) -o $(BUILD_DIR)/$(APP_TARGET) $(COMMON_OBJS) $(LDFLAGS)
 
 # Run TARGET with the provided command line options
 run: all
 	$(BUILD_DIR)/$(APP_TARGET) $(OPTIONS)
 
 # Install the application
-install:	all
+install:	clean all
 	sudo cp $(BUILD_DIR)/$(APP_TARGET) $(BINDIR)
 	sudo cp $(APP_TARGET).1 $(MANDIR)
 
@@ -146,7 +162,14 @@ analyze: build
 # Install prereqeuisites
 prereqs:
 	sudo apt update
-	sudo apt install -y build-essential cpputest libcpputest-dev libcpputest-doc libcpputest0 libcpputest0-dev libcpputest0-doc libcpputest0-dbg libcpputest0-dbg-doc libcpputest0-dbg-dev libcpputest0-dbg-doc-dev lcov gcov valgrind sloccount complexity cppcheck
+	sudo apt install -y cpputest libcpputest-dev lcov valgrind sloccount complexity cppcheck
+	git clone https://github.com/cpputest/cpputest.git
+	cd cpputest
+	mkdir cpputest_build
+	cmake -B cpputest_build
+	cmake --build cpputest_build
+	cd ..
+	rm -rf cpputest
 
 # Clean up all generated files
 clean:

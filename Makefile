@@ -79,11 +79,11 @@ CXX = g++
 # Fortran compiler command
 FC = gfortran
 # Fortran Flags (add -g for Valgrind debug info)
-FFLAGS = -g -Wall
+FFLAGS = -g -Wall -Wno-uninitialized
 # Release flags for c files
 RELEASE_FLAGS = -g -I/usr/local/include -I$(INCDIR) -Wno-return-local-addr -Wno-free-nonheap-object -MMD -MP -std=c99
 # C++ Flags (similar to C flags, adjust as needed, e.g., -std=c++11)
-CXXFLAGS = -g -I/usr/local/include -I$(INCDIR) -Wall -Wextra -MMD -MP # -std=c++11 or newer
+CXXFLAGS = -g -I/usr/local/include -I$(INCDIR) -MMD -MP # -std=c++11 or newer
 # Debug flags for c files
 DEBUG_FLAGS = -g3 -I/usr/local/include -I/usr/include/cmocka -I$(INCDIR) -fanalyzer -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wredundant-decls -Wno-long-long -Wno-parentheses -fprofile-arcs -ftest-coverage -DNCURSES_WIDECHAR=1 -MMD -MP -std=c99
 # Default flags for c files
@@ -110,19 +110,16 @@ release:		build $(BUILDDIR)/$(APP_TARGET)
 # Build all target files with debug info
 debug:		CFLAGS = $(DEBUG_FLAGS)
 debug:		LDFLAGS = $(DEBUG_LDFLAGS)
-debug:		CXXFLAGS = $(DEBUG_FLAGS) # Use same debug flags for C++ for consistency
 debug:		build $(BUILDDIR)/$(APP_TARGET)
 
 # Build integration test target files without debug info
 integration_tests:		CFLAGS = $(RELEASE_FLAGS)
-integration_tests:		CXXFLAGS = $(RELEASE_FLAGS) # Use same release flags for C++
 integration_tests:		LDFLAGS = $(RELEASE_LDFLAGS)
 integration_tests:		build $(INTEGRATION_TEST_EXECUTABLES)
 
 # Build all test target files
 test:		CFLAGS = $(DEBUG_FLAGS)
 test:		LDFLAGS = $(DEBUG_LDFLAGS)
-test:		CXXFLAGS = $(DEBUG_FLAGS) # Ensure C++ tests also use debug flags
 test:		clean build debug $(UNIT_TEST_EXECUTABLES) integration_tests
 	@echo "Running unit tests..."
 	@for test_exe in $(UNIT_TEST_EXECUTABLES); do \

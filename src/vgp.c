@@ -239,6 +239,12 @@ bool extract_file_and_line(const char *line, char *filename, char *function_name
         if (first_open_paren != NULL)
             if (first_open_paren < (function_name + len - 1))
                 *first_open_paren = '\0';
+        // If a period is included in the function name, lop it off
+        char *period = strchr(function_name, '.');
+        // If an open paren was found...
+        if (period != NULL)
+            if (period < (function_name + len - 1))
+                *period = '\0';
 
         return true;
     }

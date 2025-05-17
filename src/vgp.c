@@ -38,7 +38,7 @@ AppConfig app_config = {.verbose = false,
                         .log_file = NULL };
 
 
-const char *USER_CODE_EXTENSIONS[] = { ".c", ".cpp", ".h", ".hpp", NULL };
+const char *USER_CODE_EXTENSIONS[] = { ".c", ".cpp", ".h", ".hpp", ".C", ".CPP", ".H", ".HPP", ".cc", ".hh", ".cxx", ".hxx", ".f90", ".f", ".F", ".ada", ".ads", ".adb", NULL };
 const char *IGNORE_PATHS[] = { "/usr/", "/lib/", "vg_", NULL };
 const char *ERROR_KEYWORDS[] = {
     "Invalid read", "Invalid write",
@@ -53,6 +53,9 @@ const char *ERROR_KEYWORDS[] = {
 // Checks if a line is likely part of a user code stack trace.
 bool is_user_code_stack_trace(const char *line)
 {
+    if(line == NULL)
+        return false; // Invalid pointer
+        
     // Check for stack trace indentation
     if (strncmp(line, "   at ", 6) != 0 && strncmp(line, "   by ", 6) != 0)
     {
@@ -89,6 +92,9 @@ bool is_user_code_stack_trace(const char *line)
 // Removes the Valgrind PID prefix from a line.
 char *strip_valgrind_pid_prefix(char *line)
 {
+    if(line == NULL)
+        return NULL; // Invalid pointer
+    
     // Locate the first occurrence of "=="
     char *prefix_end = strstr(line, "==");
     if(prefix_end == NULL)  
@@ -133,8 +139,19 @@ char *get_function_name(const char *line, char *newline)
     int line_number = 0;
     int length = strlen(line);
     
+    // Read the input line
     sscanf(line,"%*s %*s %[^ ] (%[^:]:%d)",(char *)function, (char *)filename, &line_number);
 
+    // Strip of any parenthesis/parameters at the end of the function name
+    size_t len = strlen(function);
+    // Find the first opening parenthesis
+    char *first_open_paren = strchr(function, '(');
+    // If an open paren was found...
+    if (first_open_paren != NULL)
+        if (first_open_paren < (function + len - 1))
+            *first_open_paren = '\0';
+    
+    // Create the output line
     if(line_number)
         snprintf(newline,length,"%s(%s:%d)\n",function,basename(filename),line_number);
     else
@@ -203,7 +220,8 @@ bool extract_file_and_line(const char *line, char *filename, char *function_name
     char temp_filename[MAX_LINE_LENGTH];
     char temp_function[MAX_LINE_LENGTH];
     // Attempt to parse the line with function name
-    if (sscanf(line, "%*[^:]: %[^(]( %[^:]:%d)", (char *)temp_function, (char *)temp_filename, line_number) == 3)
+//    if (sscanf(line, "%*[^:]: %[^(]( %[^:]:%d)", (char *)temp_function, (char *)temp_filename, line_number) == 3)
+    if (sscanf(line, "%*s %*s %[^ ] (%[^:]:%d)", (char *)temp_function, (char *)temp_filename, line_number) == 3)
     {
         char *filename_ptr = strtok(temp_filename, " \t"); // Remove leading whitespace
         filename_ptr = strtok(filename_ptr, " \t"); // Remove trailing whitespace
@@ -212,6 +230,16 @@ bool extract_file_and_line(const char *line, char *filename, char *function_name
         char *functionname_ptr = strtok(temp_function, " \t"); // Remove leading whitespace
         functionname_ptr = strtok(functionname_ptr, " \t"); // Remove trailing newline
         strcpy(function_name, functionname_ptr);
+
+        // Strip of any parenthesis/parameters at the end of the function name
+        size_t len = strlen(function_name);
+        // Find the first opening parenthesis
+        char *first_open_paren = strchr(function_name, '(');
+        // If an open paren was found...
+        if (first_open_paren != NULL)
+            if (first_open_paren < (function_name + len - 1))
+                *first_open_paren = '\0';
+
         return true;
     }
     // Attempt to parse the line without function name

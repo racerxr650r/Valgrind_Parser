@@ -38,7 +38,7 @@ AppConfig app_config = {.verbose = false,
                         .log_file = NULL };
 
 
-const char *USER_CODE_EXTENSIONS[] = { ".c", ".cpp", ".h", ".hpp", ".C", ".CPP", ".H", ".HPP", ".cc", ".hh", ".cxx", ".hxx", ".f90", ".f", ".F", ".ada", ".ads", ".adb", NULL };
+const char *USER_CODE_EXTENSIONS[] = { ".c", ".cpp", ".h", ".hpp", ".C", ".CPP", ".H", ".HPP", ".cc", ".hh", ".cxx", ".hxx", ".f90", ".f", ".F", ".ada", ".ads", ".adb", ".rs", NULL };
 const char *IGNORE_PATHS[] = { "/usr/", "/lib/", "vg_", NULL };
 const char *ERROR_KEYWORDS[] = {
     "Invalid read", "Invalid write",
@@ -231,21 +231,33 @@ bool extract_file_and_line(const char *line, char *filename, char *function_name
         functionname_ptr = strtok(functionname_ptr, " \t"); // Remove trailing newline
         strcpy(function_name, functionname_ptr);
 
-        // Strip of any parenthesis/parameters at the end of the function name
+        // Strip of any extraneous characters from the function name
         size_t len = strlen(function_name);
-        // Find the first opening parenthesis
-        char *first_open_paren = strchr(function_name, '(');
+        // If a open paren is included in the function name, lop off the suffix
+        char *invalid = strchr(function_name, '(');
         // If an open paren was found...
-        if (first_open_paren != NULL)
-            if (first_open_paren < (function_name + len - 1))
-                *first_open_paren = '\0';
-        // If a period is included in the function name, lop it off
-        char *period = strchr(function_name, '.');
-        // If an open paren was found...
-        if (period != NULL)
-            if (period < (function_name + len - 1))
-                *period = '\0';
-
+        if (invalid != NULL)
+            if (invalid < (function_name + len))
+            {
+                *invalid = '\0';
+                len = strlen(function_name);
+            }
+        // If a period is included in the function name, lop off the suffix
+        invalid = strchr(function_name, '.');
+        // If a period was found...
+        if (invalid != NULL)
+            if (invalid < (function_name + len))
+            {
+                *invalid = '\0';
+                len = strlen(function_name);
+            }
+        // If a colon is included in the function name, lop off the pre-fix
+        invalid = strrchr(function_name, ':');
+        // If a colon was found...
+        if (invalid != NULL)
+            if (++invalid < (function_name + len))
+                memmove(function_name, invalid, strlen(invalid) + 1);
+            
         return true;
     }
     // Attempt to parse the line without function name
@@ -300,14 +312,34 @@ bool execute_command(const char *command, char *output, size_t output_size)
     return true;
 }
 
-bool parse_ctags_output(const char *ctags_output, int *start_line, int *end_line)
+bool parse_ctags_output(const char *language, char *ctags_output, int *start_line, int *end_line)
 {
     // Check for NULL pointers
-    if (ctags_output == NULL || start_line == NULL || end_line == NULL)
+    if (language == NULL || ctags_output == NULL || start_line == NULL || end_line == NULL)
     {
         fprintf(stderr, "Error: Invalid arguments to parse_ctags_output.\n");
         return false;
     }
+
+    // Find the function and file names
+    int i;
+    char *function_name = ctags_output;
+    char *file_name = strchr(ctags_output, '\t');
+    if(file_name == NULL)
+    {
+        fprintf(stderr, "Error: Could not determine source file name from ctags output.\n");
+        return false;
+    }
+    *file_name = '\0';
+    file_name++;
+    ctags_output = strchr(file_name,'\t');
+    if(ctags_output == NULL)
+    {
+        fprintf(stderr, "Error: Could not determine source file name from ctags output.\n");
+        return false;
+    }
+    *ctags_output = '\0';
+    ctags_output++;
 
     // Find the start line
     char *input = strstr(ctags_output, "line:");
@@ -318,14 +350,68 @@ bool parse_ctags_output(const char *ctags_output, int *start_line, int *end_line
     }
     sscanf(input, "line:%d", start_line);
 
-    // Find the end line
-    input = strstr(input, "end:");
-    if (input == NULL)
+    // Advance the file pointer to the start line of the function in the source file
+    FILE *source_file = fopen(file_name, "r");
+    if (source_file == NULL)
     {
-        fprintf(stderr, "Error: Invalid ctags output format.\n");
+        perror("fopen");
         return false;
     }
-    sscanf(input, "end:%d", end_line);
+    int line_number = 0;
+    char line[MAX_LINE_LENGTH];
+    while (fgets(line, sizeof(line), source_file))
+        if(++line_number == *start_line)
+            break;
+    if(line_number != *start_line)
+    {
+        fprintf(stderr, "Error: Could not find start line in source file.\n");
+        return false;
+    }
+
+    // Find the end line
+    if(!strcmp(language, "C") || !strcmp(language, "C++") || !strcmp(language, "Rust"))
+    {
+        int brace_level = 0;
+        bool first_brace = false;
+        do
+        {
+            line_number++;
+            for (i = 0; line[i] != '\0'; i++)
+            {
+                if (line[i] == '{')
+                {
+                    brace_level++;
+                    first_brace = true;
+                }
+                else if (line[i] == '}')
+                    brace_level--;
+            }
+            if (first_brace && brace_level <= 0)
+                break;
+        }while (fgets(line, sizeof(line), source_file));
+        
+        fclose(source_file);
+        *end_line = line_number;
+    }
+    else if(!strcmp(language, "Fortran"))
+    {
+        char end_string[MAX_LINE_LENGTH];
+        snprintf(end_string, sizeof(end_string), "END SUBROUTINE %s", function_name);
+        while (fgets(line, sizeof(line), source_file))
+        {
+            line_number++;
+            if(strcasestr(line, end_string))
+                break;
+        }
+        fclose(source_file);
+        *end_line = line_number;
+    }
+    else
+    {
+        fclose(source_file);
+        fprintf(stderr, "Error: Unsupported source language '%s'.\n", language);
+        return false;
+    }
 
     // Check if the start and end lines are valid
     if (*start_line <= 0 || *end_line <= 0 || *start_line >= *end_line)
@@ -349,7 +435,28 @@ void print_source_function(const char *source_file, const char *function_name, i
     char ctags_output[MAX_LINE_LENGTH];
     int start_line = 0, end_line = 0;
 
-    // Generate ctags command to find the function's start and end lines
+    // Generate ctags command to determine source file language
+    snprintf(command, sizeof(command), "ctags --print-language %s", source_file);
+
+    if(!execute_command(command, ctags_output, sizeof(ctags_output)))
+    {
+        fprintf(stderr, "Error: Could not determine source file language for '%s'.\n", source_file);
+        return;
+    }
+    // Parse the ctags output and determine source langauge
+    char *language_start = strchr(ctags_output, ':');
+    if(language_start == NULL)
+    {
+        fprintf(stderr, "Error: Could not determine source file language for '%s'.\n", source_file);
+        return;
+    }
+    language_start += 2;
+    *strchr(language_start, '\n') = '\0'; // Remove trailing newline
+    char language[MAX_LINE_LENGTH];
+    strncpy(language, language_start, sizeof(language) - 1);
+    language[sizeof(language) - 1] = '\0'; // Ensure null-termination
+
+    // Generate ctags command to find the function's start line
     snprintf(command, sizeof(command),
              "ctags -o - --c-kinds=f --fields=+ne %s | grep '^%s'", source_file, function_name);
 
@@ -360,7 +467,7 @@ void print_source_function(const char *source_file, const char *function_name, i
     }
 
     // Parse the ctags output to extract the start and end lines
-    if (!parse_ctags_output(ctags_output, &start_line, &end_line))
+    if (!parse_ctags_output(language, ctags_output, &start_line, &end_line))
     {
         fprintf(stderr, "Error: Failed to parse ctags output for function '%s'.\n", function_name);
         return;

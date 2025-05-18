@@ -42,14 +42,15 @@ UNIT_TEST_EXECUTABLES = $(patsubst $(UNITDIR)/%.c,$(BUILDDIR)/%_runner,$(UNIT_TE
 INTEGRATION_TEST_C_SRC = $(wildcard $(INTEGRATIONDIR)/*.c)
 INTEGRATION_TEST_F90_SRC = $(wildcard $(INTEGRATIONDIR)/*.f90)
 INTEGRATION_TEST_CPP_SRC = $(wildcard $(INTEGRATIONDIR)/*.cpp)
-INTEGRATION_TEST_SRC = $(INTEGRATION_TEST_C_SRC) $(INTEGRATION_TEST_F90_SRC) $(INTEGRATION_TEST_CPP_SRC)
-# Integration test C object files (if we were to compile them separately, not strictly needed for single-file apps)
+INTEGRATION_TEST_RS_SRC = $(wildcard $(INTEGRATIONDIR)/*.rs)
+INTEGRATION_TEST_SRC = $(INTEGRATION_TEST_C_SRC) $(INTEGRATION_TEST_F90_SRC) $(INTEGRATION_TEST_CPP_SRC) $(INTEGRATION_TEST_RS_SRC)# Integration test C object files (if we were to compile them separately, not strictly needed for single-file apps)
 INTEGRATION_TEST_C_OBJ = $(patsubst $(INTEGRATIONDIR)/%.c,$(BUILDDIR)/%.o,$(INTEGRATION_TEST_C_SRC))
 # Integration test executables (one for each source file)
 INTEGRATION_TEST_C_APPS = $(patsubst $(INTEGRATIONDIR)/%.c,$(BUILDDIR)/%_int_app_c,$(INTEGRATION_TEST_C_SRC))
 INTEGRATION_TEST_F90_APPS = $(patsubst $(INTEGRATIONDIR)/%.f90,$(BUILDDIR)/%_int_app_f90,$(INTEGRATION_TEST_F90_SRC))
 INTEGRATION_TEST_CPP_APPS = $(patsubst $(INTEGRATIONDIR)/%.cpp,$(BUILDDIR)/%_int_app_cpp,$(INTEGRATION_TEST_CPP_SRC))
-INTEGRATION_TEST_EXECUTABLES = $(INTEGRATION_TEST_C_APPS) $(INTEGRATION_TEST_F90_APPS) $(INTEGRATION_TEST_CPP_APPS)
+INTEGRATION_TEST_RS_APPS = $(patsubst $(INTEGRATIONDIR)/%.rs,$(BUILDDIR)/%_int_app_rs,$(INTEGRATION_TEST_RS_SRC))
+INTEGRATION_TEST_EXECUTABLES = $(INTEGRATION_TEST_C_APPS) $(INTEGRATION_TEST_F90_APPS) $(INTEGRATION_TEST_CPP_APPS) $(INTEGRATION_TEST_RS_APPS)
 # Common source files (library code like vgp.c)
 COMMON_SRC = $(filter-out $(APP_SRC) $(UNIT_TEST_SRC) $(INTEGRATION_TEST_SRC),$(wildcard $(SRCDIR)/*.c))
 # Common object files
@@ -78,12 +79,16 @@ CC = gcc
 CXX = g++
 # Fortran compiler command
 FC = gfortran
+# Rust compiler command
+RUSTC = rustc
 # Fortran Flags (add -g for Valgrind debug info)
 FFLAGS = -g -Wall -Wno-uninitialized
 # Release flags for c files
 RELEASE_FLAGS = -g -I/usr/local/include -I$(INCDIR) -Wno-return-local-addr -Wno-free-nonheap-object -MMD -MP -std=c99
 # C++ Flags (similar to C flags, adjust as needed, e.g., -std=c++11)
 CXXFLAGS = -g -I/usr/local/include -I$(INCDIR) -MMD -MP # -std=c++11 or newer
+# Rust Flags (add -g for Valgrind debug info)
+RUSTFLAGS = -g
 # Debug flags for c files
 DEBUG_FLAGS = -g3 -I/usr/local/include -I/usr/include/cmocka -I$(INCDIR) -fanalyzer -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wredundant-decls -Wno-long-long -Wno-parentheses -fprofile-arcs -ftest-coverage -DNCURSES_WIDECHAR=1 -MMD -MP -std=c99
 # Default flags for c files
@@ -131,24 +136,26 @@ test:		clean build debug $(UNIT_TEST_EXECUTABLES) integration_tests
 #	lcov --branch-coverage --capture --directory $(BUILDDIR) --output-file $(BUILDDIR)/coverage.info --ignore-errors mismatch
 #	genhtml $(BUILDDIR)/coverage.info --branch-coverage --output-directory $(BUILDDIR)/coverage
 	@echo "Cleaning previous integration test output files..."
-	@$(RM) $(BUILDDIR)/*_valgrind.log $(BUILDDIR)/*_vgp_output.log $(BUILDDIR)/*_app_stdout.log
+	@$(RM) $(BUILDDIR)/*_valgrind.log $(BUILDDIR)/*_vgp_output.log $(BUILDDIR)/*_app_stdout.log $(BUILDDIR)/*_vgp_itself_valgrind.log
 	@echo "Running integration tests..."
 	@for test_exe in $(INTEGRATION_TEST_EXECUTABLES); do \
 		test_exe_basename=$$(basename $$test_exe); \
 		valgrind_log_for_vgp=$(BUILDDIR)/$${test_exe_basename}_valgrind.log; \
 		vgp_output_file=$(BUILDDIR)/$${test_exe_basename}_vgp_output.log; \
 		test_app_stdout_file=$(BUILDDIR)/$${test_exe_basename}_app_stdout.log; \
+		vgp_itself_valgrind_log=$(BUILDDIR)/$${test_exe_basename}_vgp_itself_valgrind.log; \
 		\
 		echo "--------------------------------------------------"; \
 		echo "*** Generating Valgrind log for $$test_exe_basename (output to $$valgrind_log_for_vgp)..."; \
 		valgrind --leak-check=full --log-file=$$valgrind_log_for_vgp --fullpath-after=string $$test_exe > $$test_app_stdout_file 2>&1; \
 		\
 		echo "*** Running vgp on $$valgrind_log_for_vgp (output to $$vgp_output_file)..."; \
-		$(APP_EXE) -v -l $$valgrind_log_for_vgp > $$vgp_output_file; \
+		valgrind --leak-check=full --log-file=$$vgp_itself_valgrind_log --fullpath-after=string $(APP_EXE) -v -l $$valgrind_log_for_vgp > $$vgp_output_file 2>&1; \
 		\
-		echo "*** vgp output for $$test_exe_basename is in $$vgp_output_file"; \
-		echo "*** Valgrind log for $$test_exe_basename is in $$valgrind_log_for_vgp"; \
-		echo "*** stdout/stderr of $$test_exe_basename is in $$test_app_stdout_file"; \
+		echo "*** vgp's functional output (and its Valgrind summary) for $$test_exe_basename is in $$vgp_output_file"; \
+		echo "*** Valgrind log of the test app ($$test_exe_basename) is in $$valgrind_log_for_vgp"; \
+		echo "*** Detailed Valgrind log of vgp itself (processing $$valgrind_log_for_vgp) is in $$vgp_itself_valgrind_log"; \
+		echo "*** stdout/stderr of the test app ($$test_exe_basename) is in $$test_app_stdout_file"; \
 	done
 	@echo "--------------------------------------------------"
 
@@ -198,6 +205,11 @@ $(BUILDDIR)/%_int_app_cpp: $(INTEGRATIONDIR)/%.cpp
 	@echo "***Compiling and Linking C++ integration test $@ from $<..."
 	$(CXX) $(CXXFLAGS) -o $@ $< $(CXXLDFLAGS)
 
+# Build Rust integration test executables
+$(BUILDDIR)/%_int_app_rs: $(INTEGRATIONDIR)/%.rs
+	@echo "***Compiling Rust integration test $@ from $<..."
+	$(RUSTC) $(RUSTFLAGS) -o $@ $<
+
 # Run TARGET with the provided command line options
 run: debug
 	$(BUILDDIR)/$(APP_TARGET) $(OPTIONS)
@@ -227,7 +239,7 @@ analyze: build
 # Install prereqeuisites
 prereqs:
 	sudo apt update
-	sudo apt install -y universal-ctags lcov valgrind sloccount complexity cppcheck libcmocka-dev cmocka-doc gfortran g++
+	sudo apt install -y universal-ctags lcov valgrind sloccount complexity cppcheck libcmocka-dev cmocka-doc gfortran g++ rustc
 
 # Clean up all generated files
 clean:

@@ -31,6 +31,7 @@
 // Enable POSIX.2-1992 extensions
 // This is needed for popen() and pclose() functions
 #define _POSIX_C_SOURCE 2
+#define _GNU_SOURCE
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,7 +44,7 @@
 
  // --- Constants ---
 #define MAX_LINE_LENGTH 2048
-#define STACK_TRACE_CONTEXT_LINES 3
+#define STACK_TRACE_CONTEXT_LINES 20
 #define MAX_ERROR_TYPE_LENGTH  2048 // Maximum length of error type string
 #define MAX_SOURCE_LINE_LENGTH 2048 // Maximum length of a line in the source file
 

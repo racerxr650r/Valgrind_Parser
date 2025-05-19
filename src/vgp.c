@@ -38,7 +38,7 @@ AppConfig app_config = {.verbose = false,
                         .log_file = NULL };
 
 
-const char *USER_CODE_EXTENSIONS[] = { ".c", ".cpp", ".h", ".hpp", ".C", ".CPP", ".H", ".HPP", ".cc", ".hh", ".cxx", ".hxx", ".f90", ".f", ".F", ".ada", ".ads", ".adb", ".rs", NULL };
+const char *USER_CODE_EXTENSIONS[] = { ".c", ".cpp", ".h", ".hpp", ".C", ".CPP", ".H", ".HPP", ".cc", ".hh", ".cxx", ".hxx", ".f90", ".f", ".F", ".for", ".ada", ".ads", ".adb", ".rs", NULL };
 const char *IGNORE_PATHS[] = { "/usr/", "/lib/", "vg_", NULL };
 const char *ERROR_KEYWORDS[] = {
     "Invalid read", "Invalid write",
@@ -409,7 +409,7 @@ bool parse_ctags_output(const char *language, char *ctags_output, int *start_lin
     else
     {
         fclose(source_file);
-        fprintf(stderr, "Error: Unsupported source language '%s'.\n", language);
+        fprintf(stderr, "Note: Unsupported source language '%s'.\n", language);
         return false;
     }
 

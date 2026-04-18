@@ -102,7 +102,7 @@ static void test_is_user_code_mixed_case_extension(void **state) {
     assert_true(is_user_code_stack_trace("   at 0x123: some_func (main.C:10)"));
 }
 
-int main(void) {
+int run_is_user_code_stack_trace_tests(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(test_is_user_code_no_prefix),
         cmocka_unit_test(test_is_user_code_at_prefix_no_extension),

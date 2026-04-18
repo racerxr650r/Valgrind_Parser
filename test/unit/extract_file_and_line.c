@@ -48,7 +48,7 @@ static void test_extract_file_and_line_parses_entry_without_line_number(void **s
     assert_int_equal(line_number, 0);
 }
 
-int main(void)
+int run_extract_file_and_line_tests(void)
 {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(test_extract_file_and_line_rejects_null_args),

@@ -1,0 +1,144 @@
+        -:    0:Source:/home/janderson/Projects/Valgrind_Parser/src/main.c
+        -:    0:Graph:build/main.gcno
+        -:    0:Data:build/main.gcda
+        -:    0:Runs:5
+        -:    1:/*
+        -:    2: * main.c
+        -:    3: *
+        -:    4: * Valgrind output parser
+        -:    5: * 
+        -:    6: * Entry point for the Valgrind output parser program.
+        -:    7: *  
+        -:    8: * Created: 04/01/2025
+        -:    9: * Author : john anderson
+        -:   10: *
+        -:   11: * Copyright (C) 2025 by John Anderson <racerxr650r@gmail.com>
+        -:   12: *
+        -:   13: * Permission to use, copy, modify, and/or distribute this software for any 
+        -:   14: * purpose with or without fee is hereby granted.
+        -:   15: *
+        -:   16: * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+        -:   17: * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF 
+        -:   18: * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+        -:   19: * SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES 
+        -:   20: * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN 
+        -:   21: * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR
+        -:   22: * IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+        -:   23: */ 
+        -:   24:#include "vgp.h"
+        -:   25:
+function parse_command_line called 5 returned 100% blocks executed 43%
+        5:   26:void parse_command_line(int argc, char *argv[])
+        -:   27:{
+       20:   28:    for(int i = 1; i < argc; i++)
+branch  0 taken 75%
+branch  1 taken 25% (fallthrough)
+        -:   29:    {
+       15:   30:        if(argv[i][0] == '-')
+branch  0 taken 67% (fallthrough)
+branch  1 taken 33%
+        -:   31:        {
+       10:   32:            switch(argv[i][1])
+branch  0 taken 50%
+branch  1 taken 0%
+branch  2 taken 50%
+branch  3 taken 0%
+branch  4 taken 0%
+branch  5 taken 0%
+        -:   33:            {
+        5:   34:                case 'v':
+        5:   35:                    app_config.verbose = true;
+        5:   36:                    break;
+    #####:   37:                case 's':
+    #####:   38:                    app_config.print_source = true;
+    #####:   39:                    break;
+        5:   40:                case 'l':
+        5:   41:                    app_config.print_leak_summary = true;
+        5:   42:                    break;
+    #####:   43:                case 't':
+    #####:   44:                    app_config.print_stack = true;
+    #####:   45:                    break;
+    #####:   46:                case 'h':
+    #####:   47:                    printf("Usage: %s [options] <valgrind_log_file>\n", argv[0]);
+call    0 never executed
+    #####:   48:                    printf("Options:\n");
+call    0 never executed
+    #####:   49:                    printf("  -v : Enable verbose output\n");
+call    0 never executed
+    #####:   50:                    printf("  -s : Print source code\n");
+call    0 never executed
+    #####:   51:                    printf("  -l : Print leak summary\n");
+call    0 never executed
+    #####:   52:                    printf("  -t : Print stack trace\n");
+call    0 never executed
+    #####:   53:                    printf("  -h : Show this help message\n");
+call    0 never executed
+    #####:   54:                    exit(EXIT_SUCCESS);
+call    0 never executed
+    #####:   55:                default:
+    #####:   56:                    fprintf(stderr, "Unknown option: %s\n", argv[i]);
+call    0 never executed
+    #####:   57:                    exit(EXIT_FAILURE);
+call    0 never executed
+        -:   58:            }
+        -:   59:        }
+        -:   60:        else
+        -:   61:        {
+        5:   62:            if(!app_config.log_file)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        5:   63:                app_config.log_file = argv[i];
+        -:   64:            else
+        -:   65:            {
+    #####:   66:                fprintf(stderr, "Multiple log files specified: %s and %s\n", app_config.log_file, argv[i]);
+call    0 never executed
+    #####:   67:                exit(EXIT_FAILURE);
+call    0 never executed
+        -:   68:            }
+        -:   69:        }
+        -:   70:    }
+        5:   71:    if(!app_config.log_file)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:   72:    {
+    #####:   73:        fprintf(stderr, "No log file specified. Use -h for help.\n");
+call    0 never executed
+    #####:   74:        exit(EXIT_FAILURE);
+call    0 never executed
+        -:   75:    }
+        5:   76:}
+        -:   77:
+        -:   78:// --- Main Entry Point ---
+function main called 5 returned 100% blocks executed 75%
+        5:   79:int main(int argc, char *argv[])
+        -:   80:{
+        5:   81:    setlocale(LC_NUMERIC, "");
+call    0 returned 100%
+        -:   82:
+        5:   83:    parse_command_line(argc, argv); // Parse command line arguments
+call    0 returned 100%
+        -:   84:
+        5:   85:    const char *filename = app_config.log_file;
+        5:   86:    FILE *file = fopen(filename, "r");
+call    0 returned 100%
+        5:   87:    if (!file)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:   88:    {
+        -:   89:        // Use strerror for better error reporting
+    #####:   90:        fprintf(stderr, "Error opening file '%s': %s\n", filename, strerror(errno));
+call    0 never executed
+call    1 never executed
+    #####:   91:        return EXIT_FAILURE;
+        -:   92:    }
+        -:   93:
+        5:   94:    printf("Parsing Valgrind Log File: %s\n", filename);
+call    0 returned 100%
+        -:   95:
+        5:   96:    process_log_file(file); // Call the main processing function
+call    0 returned 100%
+        -:   97:
+        5:   98:    fclose(file);
+call    0 returned 100%
+        5:   99:    return EXIT_SUCCESS;
+        -:  100:}

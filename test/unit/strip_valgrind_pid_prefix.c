@@ -155,7 +155,7 @@ static void test_strip_leading_spaces_before_prefix(void **state) {
 }
 
 
-int main(void) {
+int run_strip_valgrind_pid_prefix_tests(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(test_strip_null_input),
         cmocka_unit_test(test_strip_empty_string),

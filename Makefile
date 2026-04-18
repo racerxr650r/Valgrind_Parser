@@ -13,6 +13,7 @@
 #         analyze: runs cppcheck static analysis
 #         prereqs: installs required build/test tooling on Debian-based systems
 #           clean: removes generated build/test output files
+#            help: displays available makefile targets
 
 # Build Variables +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # Application target executable name
@@ -43,6 +44,10 @@ UNIT_TEST_SRC = $(wildcard $(UNITDIR)/*.c)
 UNIT_TEST_OBJ = $(patsubst $(UNITDIR)/%.c,$(BUILDDIR)/%.o,$(UNIT_TEST_SRC))
 # Unit test executables (one for each source file, e.g., build/test_foo_runner)
 UNIT_TEST_EXECUTABLES = $(patsubst $(UNITDIR)/%.c,$(BUILDDIR)/%_runner,$(UNIT_TEST_SRC))
+# Unified test runner source and executable
+TEST_RUNNER_SRC = $(TESTDIR)/test_runner.c
+TEST_RUNNER_OBJ = $(BUILDDIR)/test_runner.o
+TEST_RUNNER_EXE = $(BUILDDIR)/test_runner
 # Integration test main source file
 INTEGRATION_TEST_C_SRC = $(wildcard $(INTEGRATIONDIR)/*.c)
 INTEGRATION_TEST_F90_SRC = $(wildcard $(INTEGRATIONDIR)/*.f90)
@@ -137,21 +142,10 @@ integration_tests:		build $(INTEGRATION_TEST_EXECUTABLES)
 # Build all test target files
 test:		CFLAGS = $(DEBUG_FLAGS)
 test:		LDFLAGS = $(DEBUG_LDFLAGS)
-test:		clean build debug $(UNIT_TEST_EXECUTABLES) integration_tests
-	@echo "Running unit tests..."
-	@for test_exe in $(UNIT_TEST_EXECUTABLES); do \
-		echo "--------------------------------------------------"; \
-		echo "***Running unit test $$test_exe..."; \
-		$$test_exe; \
-	done
-	@echo "--------------------------------------------------"
-	@echo "Generating coverage analysis with gcov and gcovr..."
-	@cd $(BUILDDIR)/coverage && gcov -o $(BUILDDIR) $(APP_SRC) $(COMMON_SRC) 1>/dev/null
-	@gcovr --root $(PROJECT_ROOT) --object-directory $(BUILDDIR) --html-details --output $(BUILDDIR)/coverage/index.html
-	@echo "***Coverage report: $(BUILDDIR)/coverage/index.html"
+test:		clean build debug $(UNIT_TEST_OBJ) $(TEST_RUNNER_EXE) integration_tests
 	@echo "Cleaning previous integration test output files..."
 	@$(RM) $(BUILDDIR)/*_valgrind.log $(BUILDDIR)/*_vgp_output.log $(BUILDDIR)/*_app_stdout.log $(BUILDDIR)/*_vgp_itself_valgrind.log
-	@echo "Running integration tests..."
+	@echo "Running integration test apps through Valgrind and vgp..."
 	@for test_exe in $(INTEGRATION_TEST_EXECUTABLES); do \
 		test_exe_basename=$$(basename $$test_exe); \
 		valgrind_log_for_vgp=$(BUILDDIR)/$${test_exe_basename}_valgrind.log; \
@@ -172,6 +166,15 @@ test:		clean build debug $(UNIT_TEST_EXECUTABLES) integration_tests
 		echo "*** stdout/stderr of the test app ($$test_exe_basename) is in $$test_app_stdout_file"; \
 	done
 	@echo "--------------------------------------------------"
+	@echo "*** Running vgp with additional flag combinations for coverage..."
+	@$(APP_EXE) -s -t -l $(BUILDDIR)/c_error_generator_int_app_c_valgrind.log > $(BUILDDIR)/vgp_flags_st_output.log 2>&1 || true
+	@echo "Running unified test runner (unit + integration verification)..."
+	@$(TEST_RUNNER_EXE)
+	@echo "--------------------------------------------------"
+	@echo "Generating coverage analysis with gcov and gcovr..."
+	@cd $(BUILDDIR)/coverage && gcov -o $(BUILDDIR) $(APP_SRC) $(COMMON_SRC) 1>/dev/null
+	@gcovr --root $(PROJECT_ROOT) --object-directory $(BUILDDIR) --filter $(SRCDIR)/ --html-details --output $(BUILDDIR)/coverage/index.html
+	@echo "***Coverage report: $(BUILDDIR)/coverage/index.html"
 
 # Create the build directory
 build:
@@ -192,7 +195,7 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.c
 # Compile unit test .c files from TEST_UNIT_DIR to .o files in the build directory
 $(BUILDDIR)/%.o: $(UNITDIR)/%.c
 	@echo "***Compiling unit test source $<..."
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -DVGP_EXE=\"$(APP_EXE)\" -DINT_LOG_DIR=\"$(BUILDDIR)\" -c $< -o $@
 
 # Compile integration test .c files from TESTDIR to .o files in the build directory
 $(BUILDDIR)/%.o: $(INTEGRATIONDIR)/%.c
@@ -203,6 +206,16 @@ $(BUILDDIR)/%.o: $(INTEGRATIONDIR)/%.c
 $(BUILDDIR)/%_runner: $(BUILDDIR)/%.o $(COMMON_OBJS)
 	@echo "***Linking unit test $@..."
 	$(CC) $(CFLAGS) -o $@ $< $(COMMON_OBJS) $(LDFLAGS)
+
+# Compile the unified test runner source
+$(TEST_RUNNER_OBJ): $(TEST_RUNNER_SRC)
+	@echo "***Compiling unified test runner $<..."
+	$(CC) $(CFLAGS) -DBUILD_DIR=\"$(BUILDDIR)\" -c $< -o $@
+
+# Build the unified test runner executable
+$(TEST_RUNNER_EXE): $(TEST_RUNNER_OBJ) $(UNIT_TEST_OBJ) $(COMMON_OBJS)
+	@echo "***Linking unified test runner $@..."
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 # Build C integration test executables (assuming they are single-file and self-contained)
 $(BUILDDIR)/%_int_app_c: $(INTEGRATIONDIR)/%.c
@@ -270,7 +283,25 @@ clean:
 	# Remove any Ada executables that might have been left in PROJECT_ROOT if 'mv' failed during compilation
 	$(RM) $(patsubst $(INTEGRATIONDIR)/%.adb,$(PROJECT_ROOT)/%,$(INTEGRATION_TEST_ADA_SRC))
 
+# Display available targets
+help:
+	@echo "Available targets:"
+	@echo "  release           - Compile the application source code for release"
+	@echo "  debug             - Compile the application source code with debug info"
+	@echo "  integration_tests - Build all integration test applications"
+	@echo "  test              - Compile and run unit/integration tests with coverage reports"
+	@echo "  build             - Create required build output directories"
+	@echo "  run               - Build debug target and run the application with OPTIONS"
+	@echo "  install           - Install the application and documentation"
+	@echo "  uninstall         - Uninstall the application and documentation"
+	@echo "  complexity        - Report source code complexity metrics"
+	@echo "  sloc              - Report source lines of code metrics"
+	@echo "  analyze           - Run cppcheck static analysis"
+	@echo "  prereqs           - Install required build/test tooling (Debian-based)"
+	@echo "  clean             - Remove all generated build/test output files"
+	@echo "  help              - Display this help message"
+
 # Include dependencies generated by GCC (-MMD -MP flags)
 -include $(ALL_OBJS:.o=.d)
 
-.PHONY: all clean install uninstall run test debug release integration_tests build complexity sloc analyze prereqs
+.PHONY: all clean install uninstall run test debug release integration_tests build complexity sloc analyze prereqs help

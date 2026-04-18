@@ -9,6 +9,8 @@ on:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
 
 jobs:
   build-and-test:
@@ -39,5 +41,23 @@ jobs:
           path: build/coverage
           if-no-files-found: error
 
+      - name: Upload Pages artifact
+        if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/coverage
+
       - name: Run static analysis
         run: make analyze
+
+  deploy-coverage:
+    needs: build-and-test
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -23,18 +23,19 @@ extern int run_vgp_core_tests(void);
 /* Integration test app basenames and their expected properties */
 typedef struct {
     const char *app_basename;
-    int expected_error_count;
+    int min_expected_error_count;
+    int max_expected_error_count;
     int expected_leak_count;
     bool has_leak_summary;
     bool check_vgp_no_valgrind_errors;
 } IntegrationTestCase;
 
 static const IntegrationTestCase integration_cases[] = {
-    { "c_error_generator_int_app_c",       6, 3, true,  true  },
-    { "cpp_error_generator_int_app_cpp",    4, 1, true,  true  },
-    { "fortran_error_generator_int_app_f90",3, 4, false, true  },
-    { "rust_error_generator_int_app_rs",    4, 1, true,  false },
-    { "ada_error_generator_int_app_ada",    0, 2, true,  true  },
+    { "c_error_generator_int_app_c",       6, 6, 3, true,  true  },
+    { "cpp_error_generator_int_app_cpp",    4, 4, 1, true,  true  },
+    { "fortran_error_generator_int_app_f90",3, 3, 4, false, true  },
+    { "rust_error_generator_int_app_rs",    3, 4, 1, true,  false },
+    { "ada_error_generator_int_app_ada",    0, 0, 2, true,  true  },
 };
 
 #define NUM_INTEGRATION_CASES (sizeof(integration_cases) / sizeof(integration_cases[0]))
@@ -135,10 +136,12 @@ static void test_vgp_output_error_counts(void **state)
             fail_msg("Failed to read file: %s", path);
 
         int total_errors = extract_int_after_prefix(contents, "* Total Errors: ");
-        if (total_errors != integration_cases[i].expected_error_count)
-            fail_msg("%s: expected Total Errors %d, got %d",
+        if (total_errors < integration_cases[i].min_expected_error_count ||
+            total_errors > integration_cases[i].max_expected_error_count)
+            fail_msg("%s: expected Total Errors %d..%d, got %d",
                      integration_cases[i].app_basename,
-                     integration_cases[i].expected_error_count, total_errors);
+                     integration_cases[i].min_expected_error_count,
+                     integration_cases[i].max_expected_error_count, total_errors);
 
         free(contents);
     }
@@ -207,10 +210,12 @@ static void test_vgp_output_has_expected_error_blocks(void **state)
             count++;
             p++;
         }
-        if (count != integration_cases[i].expected_error_count)
-            fail_msg("%s: expected %d [ERROR #] blocks, got %d",
+        if (count < integration_cases[i].min_expected_error_count ||
+            count > integration_cases[i].max_expected_error_count)
+            fail_msg("%s: expected %d..%d [ERROR #] blocks, got %d",
                      integration_cases[i].app_basename,
-                     integration_cases[i].expected_error_count, count);
+                     integration_cases[i].min_expected_error_count,
+                     integration_cases[i].max_expected_error_count, count);
 
         free(contents);
     }

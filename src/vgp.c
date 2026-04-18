@@ -54,17 +54,19 @@ static bool copy_first_token(const char *input, char *output, size_t output_size
     if (input == NULL || output == NULL || output_size == 0)
         return false;
 
-    char token_buffer[MAX_LINE_LENGTH];
-    snprintf(token_buffer, sizeof(token_buffer), "%s", input);
-
-    char *token = strtok(token_buffer, " \t");
-    if (token == NULL)
+    const char *token_start = input + strspn(input, " \t");
+    if (*token_start == '\0')
     {
         output[0] = '\0';
         return false;
     }
 
-    snprintf(output, output_size, "%s", token);
+    size_t token_length = strcspn(token_start, " \t");
+    if (token_length >= output_size)
+        token_length = output_size - 1;
+
+    memcpy(output, token_start, token_length);
+    output[token_length] = '\0';
     return true;
 }
 
@@ -276,7 +278,7 @@ bool extract_file_and_line(const char *line, char *filename, char *function_name
     else if (sscanf(line, "%*[^:]: %[^:]:%d", (char *)temp_filename, line_number) == 2)
     {
         snprintf(filename, MAX_LINE_LENGTH, "%s", temp_filename); // Fallback if basename fails
-        strcpy(function_name, ""); // No function name available
+        function_name[0] = '\0'; // No function name available
         return true;
     }
     // Attempt to parse a line without line number

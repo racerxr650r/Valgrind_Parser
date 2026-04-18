@@ -49,6 +49,48 @@ const char *ERROR_KEYWORDS[] = {
     NULL
 };
 
+static bool copy_first_token(const char *input, char *output, size_t output_size)
+{
+    if (input == NULL || output == NULL || output_size == 0)
+        return false;
+
+    const char *token_start = input + strspn(input, " \t");
+    if (*token_start == '\0')
+    {
+        output[0] = '\0';
+        return false;
+    }
+
+    size_t token_length = strcspn(token_start, " \t");
+    if (token_length >= output_size)
+        token_length = output_size - 1;
+
+    memcpy(output, token_start, token_length);
+    output[token_length] = '\0';
+    return true;
+}
+
+static void normalize_function_name(char *function_name)
+{
+    if (function_name == NULL || function_name[0] == '\0')
+        return;
+
+    // Remove parameter suffixes such as "foo(...)" if present.
+    char *invalid = strchr(function_name, '(');
+    if (invalid != NULL)
+        *invalid = '\0';
+
+    // Remove compiler-added dotted suffixes when present.
+    invalid = strchr(function_name, '.');
+    if (invalid != NULL)
+        *invalid = '\0';
+
+    // Keep only the final scope token for names like "ns::Class::method".
+    char *scope_separator = strrchr(function_name, ':');
+    if (scope_separator != NULL && scope_separator[1] != '\0')
+        memmove(function_name, scope_separator + 1, strlen(scope_separator + 1) + 1);
+}
+
 // --- Helper Functions ---
 // Checks if a line is likely part of a user code stack trace.
 bool is_user_code_stack_trace(const char *line)
@@ -223,60 +265,30 @@ bool extract_file_and_line(const char *line, char *filename, char *function_name
 //    if (sscanf(line, "%*[^:]: %[^(]( %[^:]:%d)", (char *)temp_function, (char *)temp_filename, line_number) == 3)
     if (sscanf(line, "%*s %*s %[^ ] (%[^:]:%d)", (char *)temp_function, (char *)temp_filename, line_number) == 3)
     {
-        char *filename_ptr = strtok(temp_filename, " \t"); // Remove leading whitespace
-        filename_ptr = strtok(filename_ptr, " \t"); // Remove trailing whitespace
-        strcpy(filename, filename_ptr);
+        // Typical Valgrind stack format:
+        // "   at 0x...: function_name (/path/to/file.c:123)"
+        if (!copy_first_token(temp_filename, filename, MAX_LINE_LENGTH) ||
+            !copy_first_token(temp_function, function_name, MAX_LINE_LENGTH))
+            return false;
 
-        char *functionname_ptr = strtok(temp_function, " \t"); // Remove leading whitespace
-        functionname_ptr = strtok(functionname_ptr, " \t"); // Remove trailing newline
-        strcpy(function_name, functionname_ptr);
-
-        // Strip of any extraneous characters from the function name
-        size_t len = strlen(function_name);
-        // If a open paren is included in the function name, lop off the suffix
-        char *invalid = strchr(function_name, '(');
-        // If an open paren was found...
-        if (invalid != NULL)
-            if (invalid < (function_name + len))
-            {
-                *invalid = '\0';
-                len = strlen(function_name);
-            }
-        // If a period is included in the function name, lop off the suffix
-        invalid = strchr(function_name, '.');
-        // If a period was found...
-        if (invalid != NULL)
-            if (invalid < (function_name + len))
-            {
-                *invalid = '\0';
-                len = strlen(function_name);
-            }
-        // If a colon is included in the function name, lop off the pre-fix
-        invalid = strrchr(function_name, ':');
-        // If a colon was found...
-        if (invalid != NULL)
-            if (++invalid < (function_name + len))
-                memmove(function_name, invalid, strlen(invalid) + 1);
-            
+        normalize_function_name(function_name);
         return true;
     }
     // Attempt to parse the line without function name
     else if (sscanf(line, "%*[^:]: %[^:]:%d", (char *)temp_filename, line_number) == 2)
     {
-        strcpy(filename, temp_filename); // Fallback if basename fails
-        strcpy(function_name, ""); // No function name available
+        snprintf(filename, MAX_LINE_LENGTH, "%s", temp_filename); // Fallback if basename fails
+        function_name[0] = '\0'; // No function name available
         return true;
     }
     // Attempt to parse a line without line number
     else if (sscanf(line, "%*[^:]: %[^(](in %[^)])", (char *)temp_function, (char *)temp_filename) == 2)
     {
-        char *filename_ptr = strtok(temp_filename, " \t"); // Remove leading whitespace
-        filename_ptr = strtok(filename_ptr, " \t"); // Remove trailing whitespace
-        strcpy(filename, filename_ptr);
+        if (!copy_first_token(temp_filename, filename, MAX_LINE_LENGTH) ||
+            !copy_first_token(temp_function, function_name, MAX_LINE_LENGTH))
+            return false;
 
-        char *functionname_ptr = strtok(temp_function, " \t"); // Remove leading whitespace
-        functionname_ptr = strtok(functionname_ptr, " \t"); // Remove trailing newline
-        strcpy(function_name, functionname_ptr);
+        normalize_function_name(function_name);
 
         *line_number = 0; // No line number available
         return true;

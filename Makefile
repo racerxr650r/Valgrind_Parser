@@ -146,7 +146,7 @@ test:		clean build debug $(UNIT_TEST_EXECUTABLES) integration_tests
 	done
 	@echo "--------------------------------------------------"
 	@echo "Generating coverage analysis with gcov and gcovr..."
-	@cd $(BUILDDIR)/coverage && gcov -o $(BUILDDIR) $(APP_SRC) $(COMMON_SRC) > /dev/null
+	@cd $(BUILDDIR)/coverage && gcov -o $(BUILDDIR) $(APP_SRC) $(COMMON_SRC) 1>/dev/null
 	@gcovr --root $(PROJECT_ROOT) --object-directory $(BUILDDIR) --html-details --output $(BUILDDIR)/coverage/index.html
 	@echo "***Coverage report: $(BUILDDIR)/coverage/index.html"
 	@echo "Cleaning previous integration test output files..."
@@ -259,10 +259,10 @@ sloc: build
 analyze: build
 	cppcheck -v --std=c99 --platform=avr8 --library=avr.cfg --max-ctu-depth=10 --cppcheck-build-dir=$(BUILDDIR)/cppcheck --language=c --inconclusive -I . $(APP_SRC) $(COMMON_SRC)
 
-# Install prereqeuisites
+# Install prerequisites
 prereqs:
 	sudo apt update
-	sudo apt install -y universal-ctags lcov gcovr valgrind sloccount complexity cppcheck libcmocka-dev cmocka-doc gfortran g++ rustc gnat
+	sudo apt install -y gcc make universal-ctags gcovr valgrind sloccount complexity cppcheck libcmocka-dev cmocka-doc gfortran g++ rustc gnat
 
 # Clean up all generated files
 clean:

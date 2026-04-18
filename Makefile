@@ -177,8 +177,8 @@ coverage_report:	LDFLAGS = $(DEBUG_LDFLAGS)
 coverage_report:
 	@echo "Generating coverage analysis with gcov and gcovr..."
 	@cd $(BUILDDIR)/coverage && gcov -o $(BUILDDIR) $(APP_SRC) $(COMMON_SRC) 1>/dev/null
-	@gcovr --root $(PROJECT_ROOT) --object-directory $(BUILDDIR) --filter $(SRCDIR)/ --html-details --output $(BUILDDIR)/coverage/index.html
-	@echo "***Coverage report: $(BUILDDIR)/coverage/index.html"
+	@gcovr --root $(PROJECT_ROOT) --object-directory $(BUILDDIR) --filter $(SRCDIR)/ --html-details --output $(BUILDDIR)/coverage/coverage.html
+	@echo "***Coverage report: $(BUILDDIR)/coverage/coverage.html"
 
 # Generate combined test results + coverage HTML report (run after test)
 combined_report:	coverage_report
@@ -191,7 +191,7 @@ combined_report:	coverage_report
 	echo '<h1>Test Results</h1><pre>'; \
 	sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g' $(BUILDDIR)/test_results.txt; \
 	echo '</pre><h1>Coverage Report</h1>'; \
-	echo '<iframe src="index.html"></iframe>'; \
+	echo '<iframe src="coverage.html"></iframe>'; \
 	echo '</body></html>'; \
 	} > $(BUILDDIR)/coverage/combined_report.html
 	@echo "*** Combined report: $(BUILDDIR)/coverage/combined_report.html"

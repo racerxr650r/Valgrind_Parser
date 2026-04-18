@@ -12,6 +12,18 @@ sudo apt install git
 git clone https://github.com/racerxr650r/Valgrind_Parser
 ```
 
+## Install required build and test tools
+Install the required tools before building or testing Valgrind_Parser:
+```console
+sudo apt update
+sudo apt install -y gcc make universal-ctags gcovr valgrind sloccount complexity cppcheck libcmocka-dev cmocka-doc gfortran g++ rustc gnat
+```
+
+You can also install these with the Makefile helper target:
+```console
+make prereqs
+```
+
 ## Build the application
 ```console
 cd Valgrind_Parser

@@ -5,6 +5,8 @@ You can view the [Software Design Document](https://github.com/racerxr650r/Valgr
 Requirements](https://github.com/racerxr650r/Valgrind_Parser/blob/develop/HLRs.md), and 
 [Low Level Requirements](https://github.com/racerxr650r/Valgrind_Parser/blob/develop/LLRs.md).
 
+Go here to see the latest CI [test results and code coverage](https://racerxr650r.github.io/Valgrind_Parser/) for the project source.
+
 ## Download this repository
 ```console
 sudo apt update
@@ -43,19 +45,6 @@ prompted for your password.
 (directory to install the man page documentation) can be defined from the 
 make command line. This will replace the default values. The defaults for 
 BINDIR and MANDIR should work for most Linux distributions.
-
-## Install Universal Ctags
-The valgrind parser (vgp) uses the Universl Ctags application to parse the source function from the original source file. Therefore,
-you need to install this application for vgp to work with the -v or -s flags set. To install using the makefile on a debian based
-system. Do the following:
-```console
-make prereqs
-```
-This will install some additional packages required for testing vgp. If you prefer to only install ctags. Do the following:
-```console
-sudo apt update
-sudo apt install universal-ctags
-```
 
 ## Run the application
 ```console

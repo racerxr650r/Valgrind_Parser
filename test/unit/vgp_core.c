@@ -10,8 +10,45 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <fcntl.h>
 
 #include "vgp.h"
+
+/* Helpers to suppress stdout/stderr during noisy tests */
+static int saved_stdout = -1;
+static int saved_stderr = -1;
+
+static int setup_suppress(void **state)
+{
+    (void)state;
+    fflush(stdout);
+    fflush(stderr);
+    saved_stdout = dup(STDOUT_FILENO);
+    saved_stderr = dup(STDERR_FILENO);
+    int devnull = open("/dev/null", O_WRONLY);
+    dup2(devnull, STDOUT_FILENO);
+    dup2(devnull, STDERR_FILENO);
+    close(devnull);
+    return 0;
+}
+
+static int teardown_suppress(void **state)
+{
+    (void)state;
+    fflush(stdout);
+    fflush(stderr);
+    if (saved_stdout >= 0) {
+        dup2(saved_stdout, STDOUT_FILENO);
+        close(saved_stdout);
+        saved_stdout = -1;
+    }
+    if (saved_stderr >= 0) {
+        dup2(saved_stderr, STDERR_FILENO);
+        close(saved_stderr);
+        saved_stderr = -1;
+    }
+    return 0;
+}
 
 /* ---- Tests for initialize_parse_state ---- */
 
@@ -1147,6 +1184,9 @@ static void test_extract_file_and_line_dotted_suffix(void **state)
 /* NOTE: is_valid_function_char is declared in vgp.h but not defined in vgp.c,
    so it cannot be tested here. */
 
+/* Shorthand for tests that produce noisy stdout/stderr */
+#define QUIET_TEST(f) cmocka_unit_test_setup_teardown(f, setup_suppress, teardown_suppress)
+
 int run_vgp_core_tests(void)
 {
     const struct CMUnitTest tests[] = {
@@ -1154,68 +1194,68 @@ int run_vgp_core_tests(void)
         cmocka_unit_test(test_initialize_parse_state_normal),
         cmocka_unit_test(test_initialize_parse_state_null),
         /* check_start_new_error */
-        cmocka_unit_test(test_check_start_new_error_null_args),
-        cmocka_unit_test(test_check_start_new_error_detects_invalid_read),
-        cmocka_unit_test(test_check_start_new_error_detects_invalid_write),
-        cmocka_unit_test(test_check_start_new_error_detects_uninit),
-        cmocka_unit_test(test_check_start_new_error_detects_invalid_free),
-        cmocka_unit_test(test_check_start_new_error_detects_mismatched_free),
-        cmocka_unit_test(test_check_start_new_error_detects_overlap),
-        cmocka_unit_test(test_check_start_new_error_no_match),
-        cmocka_unit_test(test_check_start_new_error_already_in_block),
+        QUIET_TEST(test_check_start_new_error_null_args),
+        QUIET_TEST(test_check_start_new_error_detects_invalid_read),
+        QUIET_TEST(test_check_start_new_error_detects_invalid_write),
+        QUIET_TEST(test_check_start_new_error_detects_uninit),
+        QUIET_TEST(test_check_start_new_error_detects_invalid_free),
+        QUIET_TEST(test_check_start_new_error_detects_mismatched_free),
+        QUIET_TEST(test_check_start_new_error_detects_overlap),
+        QUIET_TEST(test_check_start_new_error_no_match),
+        QUIET_TEST(test_check_start_new_error_already_in_block),
         /* process_stack_trace_line */
-        cmocka_unit_test(test_process_stack_trace_line_null_args),
-        cmocka_unit_test(test_process_stack_trace_line_finds_user_code),
-        cmocka_unit_test(test_process_stack_trace_line_non_user_code),
-        cmocka_unit_test(test_process_stack_trace_line_with_print_stack),
-        cmocka_unit_test(test_process_stack_trace_line_ellipsis_branch),
-        cmocka_unit_test(test_process_stack_trace_line_ellipsis_no_verbose),
+        QUIET_TEST(test_process_stack_trace_line_null_args),
+        QUIET_TEST(test_process_stack_trace_line_finds_user_code),
+        QUIET_TEST(test_process_stack_trace_line_non_user_code),
+        QUIET_TEST(test_process_stack_trace_line_with_print_stack),
+        QUIET_TEST(test_process_stack_trace_line_ellipsis_branch),
+        QUIET_TEST(test_process_stack_trace_line_ellipsis_no_verbose),
         /* finalize_error_block */
-        cmocka_unit_test(test_finalize_error_block_null),
-        cmocka_unit_test(test_finalize_error_block_no_user_code),
-        cmocka_unit_test(test_finalize_error_block_with_print_function),
-        cmocka_unit_test(test_finalize_error_block_with_verbose),
+        QUIET_TEST(test_finalize_error_block_null),
+        QUIET_TEST(test_finalize_error_block_no_user_code),
+        QUIET_TEST(test_finalize_error_block_with_print_function),
+        QUIET_TEST(test_finalize_error_block_with_verbose),
         /* process_in_error_block */
-        cmocka_unit_test(test_process_in_error_block_null_args),
-        cmocka_unit_test(test_process_in_error_block_stack_trace),
-        cmocka_unit_test(test_process_in_error_block_non_stack_trace),
+        QUIET_TEST(test_process_in_error_block_null_args),
+        QUIET_TEST(test_process_in_error_block_stack_trace),
+        QUIET_TEST(test_process_in_error_block_non_stack_trace),
         /* process_summary_lines */
-        cmocka_unit_test(test_process_summary_lines_null),
-        cmocka_unit_test(test_process_summary_lines_leak_summary),
-        cmocka_unit_test(test_process_summary_lines_leak_without_flag),
-        cmocka_unit_test(test_process_summary_lines_error_summary),
-        cmocka_unit_test(test_process_summary_lines_no_match),
+        QUIET_TEST(test_process_summary_lines_null),
+        QUIET_TEST(test_process_summary_lines_leak_summary),
+        QUIET_TEST(test_process_summary_lines_leak_without_flag),
+        QUIET_TEST(test_process_summary_lines_error_summary),
+        QUIET_TEST(test_process_summary_lines_no_match),
         /* print_leak_summary_line */
-        cmocka_unit_test(test_print_leak_summary_line_parse_success),
-        cmocka_unit_test(test_print_leak_summary_line_parse_fail_with_newline),
-        cmocka_unit_test(test_print_leak_summary_line_parse_fail_no_newline),
+        QUIET_TEST(test_print_leak_summary_line_parse_success),
+        QUIET_TEST(test_print_leak_summary_line_parse_fail_with_newline),
+        QUIET_TEST(test_print_leak_summary_line_parse_fail_no_newline),
         /* print_final_error_summary */
-        cmocka_unit_test(test_print_final_error_summary_parse_success),
-        cmocka_unit_test(test_print_final_error_summary_parse_fail_with_newline),
-        cmocka_unit_test(test_print_final_error_summary_parse_fail_no_newline),
+        QUIET_TEST(test_print_final_error_summary_parse_success),
+        QUIET_TEST(test_print_final_error_summary_parse_fail_with_newline),
+        QUIET_TEST(test_print_final_error_summary_parse_fail_no_newline),
         /* print_error_header */
-        cmocka_unit_test(test_print_error_header_with_newline),
-        cmocka_unit_test(test_print_error_header_without_newline),
-        cmocka_unit_test(test_print_error_header_no_stack_flag),
+        QUIET_TEST(test_print_error_header_with_newline),
+        QUIET_TEST(test_print_error_header_without_newline),
+        QUIET_TEST(test_print_error_header_no_stack_flag),
         /* get_function_name */
-        cmocka_unit_test(test_get_function_name_with_line_number),
-        cmocka_unit_test(test_get_function_name_without_line_number),
-        cmocka_unit_test(test_get_function_name_paren_in_function),
+        QUIET_TEST(test_get_function_name_with_line_number),
+        QUIET_TEST(test_get_function_name_without_line_number),
+        QUIET_TEST(test_get_function_name_paren_in_function),
         /* process_log_file */
-        cmocka_unit_test(test_process_log_file_null),
-        cmocka_unit_test(test_process_log_file_with_error_block),
-        cmocka_unit_test(test_process_log_file_eof_in_error_block),
-        cmocka_unit_test(test_process_log_file_leak_summary),
-        cmocka_unit_test(test_process_log_file_multiple_errors),
-        cmocka_unit_test(test_process_log_file_no_verbose),
-        cmocka_unit_test(test_process_log_file_with_print_source),
+        QUIET_TEST(test_process_log_file_null),
+        QUIET_TEST(test_process_log_file_with_error_block),
+        QUIET_TEST(test_process_log_file_eof_in_error_block),
+        QUIET_TEST(test_process_log_file_leak_summary),
+        QUIET_TEST(test_process_log_file_multiple_errors),
+        QUIET_TEST(test_process_log_file_no_verbose),
+        QUIET_TEST(test_process_log_file_with_print_source),
         /* extract_file_and_line additional */
         cmocka_unit_test(test_extract_file_and_line_format_without_function),
         cmocka_unit_test(test_extract_file_and_line_in_format),
         /* execute_command */
         cmocka_unit_test(test_execute_command_null_args),
-        cmocka_unit_test(test_execute_command_success),
-        cmocka_unit_test(test_execute_command_empty_output),
+        QUIET_TEST(test_execute_command_success),
+        QUIET_TEST(test_execute_command_empty_output),
         /* main.c flag coverage */
         cmocka_unit_test(test_main_help_flag),
         cmocka_unit_test(test_main_unknown_flag),
@@ -1224,28 +1264,28 @@ int run_vgp_core_tests(void)
         cmocka_unit_test(test_main_nonexistent_file),
         cmocka_unit_test(test_main_stack_flag),
         /* print_source_function */
-        cmocka_unit_test(test_print_source_function_null_args),
-        cmocka_unit_test(test_print_source_function_real_c_file),
-        cmocka_unit_test(test_print_source_function_nonexistent_function),
+        QUIET_TEST(test_print_source_function_null_args),
+        QUIET_TEST(test_print_source_function_real_c_file),
+        QUIET_TEST(test_print_source_function_nonexistent_function),
         /* parse_ctags_output */
-        cmocka_unit_test(test_parse_ctags_output_null_args),
-        cmocka_unit_test(test_parse_ctags_output_no_tab),
-        cmocka_unit_test(test_parse_ctags_output_one_tab),
-        cmocka_unit_test(test_parse_ctags_output_no_line_field),
-        cmocka_unit_test(test_parse_ctags_output_bad_file),
-        cmocka_unit_test(test_parse_ctags_output_unsupported_language),
-        cmocka_unit_test(test_parse_ctags_output_c_success),
-        cmocka_unit_test(test_parse_ctags_output_fortran_success),
+        QUIET_TEST(test_parse_ctags_output_null_args),
+        QUIET_TEST(test_parse_ctags_output_no_tab),
+        QUIET_TEST(test_parse_ctags_output_one_tab),
+        QUIET_TEST(test_parse_ctags_output_no_line_field),
+        QUIET_TEST(test_parse_ctags_output_bad_file),
+        QUIET_TEST(test_parse_ctags_output_unsupported_language),
+        QUIET_TEST(test_parse_ctags_output_c_success),
+        QUIET_TEST(test_parse_ctags_output_fortran_success),
         /* process_summary_lines verbose */
-        cmocka_unit_test(test_process_summary_lines_leak_with_verbose),
+        QUIET_TEST(test_process_summary_lines_leak_with_verbose),
         /* process_stack_trace_line ellipsis verbose */
-        cmocka_unit_test(test_process_stack_trace_line_ellipsis_verbose),
+        QUIET_TEST(test_process_stack_trace_line_ellipsis_verbose),
         /* additional process_log_file */
-        cmocka_unit_test(test_process_log_file_with_leak_flags_only),
-        cmocka_unit_test(test_process_log_file_error_with_stack_flag),
-        cmocka_unit_test(test_process_log_file_many_stack_lines),
-        cmocka_unit_test(test_process_log_file_with_real_source),
-        cmocka_unit_test(test_process_log_file_many_stack_lines_no_verbose),
+        QUIET_TEST(test_process_log_file_with_leak_flags_only),
+        QUIET_TEST(test_process_log_file_error_with_stack_flag),
+        QUIET_TEST(test_process_log_file_many_stack_lines),
+        QUIET_TEST(test_process_log_file_with_real_source),
+        QUIET_TEST(test_process_log_file_many_stack_lines_no_verbose),
         /* additional extract_file_and_line */
         cmocka_unit_test(test_extract_file_and_line_scope_operator),
         cmocka_unit_test(test_extract_file_and_line_dotted_suffix),

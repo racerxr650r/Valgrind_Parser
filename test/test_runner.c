@@ -240,14 +240,31 @@ static void test_vgp_itself_no_valgrind_errors(void **state)
 int main(void)
 {
     int failures = 0;
+    int group_result;
+
+    printf("==========================================================\n");
+    printf("  VGP Test Runner - Unit & Integration Tests\n");
+    printf("==========================================================\n\n");
 
     /* Run unit tests */
-    failures += run_extract_file_and_line_tests();
-    failures += run_is_user_code_stack_trace_tests();
-    failures += run_strip_valgrind_pid_prefix_tests();
-    failures += run_vgp_core_tests();
+    printf("--- Unit: extract_file_and_line ---\n");
+    group_result = run_extract_file_and_line_tests();
+    failures += group_result;
+
+    printf("\n--- Unit: is_user_code_stack_trace ---\n");
+    group_result = run_is_user_code_stack_trace_tests();
+    failures += group_result;
+
+    printf("\n--- Unit: strip_valgrind_pid_prefix ---\n");
+    group_result = run_strip_valgrind_pid_prefix_tests();
+    failures += group_result;
+
+    printf("\n--- Unit: vgp_core ---\n");
+    group_result = run_vgp_core_tests();
+    failures += group_result;
 
     /* Run integration tests */
+    printf("\n--- Integration: vgp output verification ---\n");
     const struct CMUnitTest integration_tests[] = {
         cmocka_unit_test(test_vgp_output_has_header),
         cmocka_unit_test(test_vgp_output_error_counts),
@@ -258,6 +275,14 @@ int main(void)
     };
 
     failures += cmocka_run_group_tests(integration_tests, NULL, NULL);
+
+    /* Final summary */
+    printf("\n==========================================================\n");
+    if (failures == 0)
+        printf("  RESULT: ALL TESTS PASSED\n");
+    else
+        printf("  RESULT: %d TEST GROUP(S) FAILED\n", failures);
+    printf("==========================================================\n");
 
     return failures;
 }

@@ -1,4 +1,8 @@
 #define _POSIX_C_SOURCE 200809L
+#define _GNU_SOURCE
+
+#include "vgp.h"
+
 #include <stdarg.h>
 #include <stddef.h>
 #include <setjmp.h>
@@ -11,8 +15,6 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <fcntl.h>
-
-#include "vgp.h"
 
 /* Helpers to suppress stdout/stderr during noisy tests */
 static int saved_stdout = -1;

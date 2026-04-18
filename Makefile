@@ -169,7 +169,7 @@ test:		clean build debug $(UNIT_TEST_OBJ) $(TEST_RUNNER_EXE) integration_tests
 	@echo "*** Running vgp with additional flag combinations for coverage..."
 	@$(APP_EXE) -s -t -l $(BUILDDIR)/c_error_generator_int_app_c_valgrind.log > $(BUILDDIR)/vgp_flags_st_output.log 2>&1 || true
 	@echo "Running unified test runner (unit + integration verification)..."
-	@$(TEST_RUNNER_EXE)
+	@bash -o pipefail -c '$(TEST_RUNNER_EXE) 2>&1 | tee $(BUILDDIR)/test_results.txt'
 
 # Generate gcov/gcovr coverage reports (run after test)
 coverage_report:	CFLAGS = $(DEBUG_FLAGS)
@@ -179,6 +179,22 @@ coverage_report:
 	@cd $(BUILDDIR)/coverage && gcov -o $(BUILDDIR) $(APP_SRC) $(COMMON_SRC) 1>/dev/null
 	@gcovr --root $(PROJECT_ROOT) --object-directory $(BUILDDIR) --filter $(SRCDIR)/ --html-details --output $(BUILDDIR)/coverage/index.html
 	@echo "***Coverage report: $(BUILDDIR)/coverage/index.html"
+
+# Generate combined test results + coverage HTML report (run after test)
+combined_report:	coverage_report
+	@echo "Generating combined test + coverage report..."
+	@{ \
+	echo '<!DOCTYPE html><html><head><meta charset="utf-8">'; \
+	echo '<title>Test Results &amp; Coverage Report</title>'; \
+	echo '<style>body{font-family:sans-serif;margin:2em}pre{background:#1e1e1e;color:#d4d4d4;padding:1em;overflow-x:auto;border-radius:4px}'; \
+	echo 'iframe{width:100%;height:80vh;border:1px solid #ccc;border-radius:4px}</style></head><body>'; \
+	echo '<h1>Test Results</h1><pre>'; \
+	sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g' $(BUILDDIR)/test_results.txt; \
+	echo '</pre><h1>Coverage Report</h1>'; \
+	echo '<iframe src="index.html"></iframe>'; \
+	echo '</body></html>'; \
+	} > $(BUILDDIR)/coverage/combined_report.html
+	@echo "*** Combined report: $(BUILDDIR)/coverage/combined_report.html"
 
 # Create the build directory
 build:
@@ -295,6 +311,7 @@ help:
 	@echo "  integration_tests - Build all integration test applications"
 	@echo "  test              - Compile and run unit/integration tests"
 	@echo "  coverage_report   - Generate gcov/gcovr coverage reports (run after test)"
+	@echo "  combined_report   - Generate combined test results + coverage HTML report"
 	@echo "  build             - Create required build output directories"
 	@echo "  run               - Build debug target and run the application with OPTIONS"
 	@echo "  install           - Install the application and documentation"

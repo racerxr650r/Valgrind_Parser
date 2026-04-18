@@ -28,10 +28,14 @@
 #ifndef VGP_H
 #define VGP_H
 
-// Enable POSIX.2-1992 extensions
-// This is needed for popen() and pclose() functions
+// Enable POSIX.2-1992 extensions (minimum for popen()/pclose())
+// Only define if not already set to a higher conformance level
+#ifndef _POSIX_C_SOURCE
 #define _POSIX_C_SOURCE 2
+#endif
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>

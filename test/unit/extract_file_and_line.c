@@ -1,3 +1,16 @@
+/*
+ * extract_file_and_line.c
+ *
+ * Unit tests for extract_file_and_line() in src/vgp.c.
+ *
+ * Function under test traces to:
+ *   LLR-EFAL-01..07 (Sec. 8 of doc/LLRs.md)
+ *   HLR-021 Stack Frame Decoding
+ *   HLR-025 First-User-Frame Capture
+ *   HLR-039 Defensive Argument Validation
+ *   HLR-040 Non-Fatal Recovery from Malformed Input
+ */
+
 #include <stdarg.h>
 #include <stddef.h>
 #include <setjmp.h>
@@ -7,6 +20,11 @@
 
 #include "vgp.h"
 
+/*
+ * Verifies LLR-EFAL-02 (NULL-pointer guards): the function returns false
+ * when any of its four output/input pointers is NULL.
+ * Traces to HLR-039 (Defensive Argument Validation).
+ */
 static void test_extract_file_and_line_rejects_null_args(void **state)
 {
     (void)state;
@@ -20,6 +38,13 @@ static void test_extract_file_and_line_rejects_null_args(void **state)
     assert_false(extract_file_and_line("line", filename, function_name, NULL));
 }
 
+/*
+ * Verifies LLR-EFAL-03, LLR-EFAL-04 (primary three-field sscanf path) on a
+ * Valgrind frame of the form "   at 0x...: function (file:line)".
+ * Also confirms namespace stripping done by normalize_function_name().
+ * Traces to HLR-021 (Stack Frame Decoding) and HLR-025 (First-User-Frame
+ * Capture).
+ */
 static void test_extract_file_and_line_parses_stack_entry_with_line(void **state)
 {
     (void)state;
@@ -34,6 +59,13 @@ static void test_extract_file_and_line_parses_stack_entry_with_line(void **state
     assert_int_equal(line_number, 157);
 }
 
+/*
+ * Verifies LLR-EFAL-06 (third "(in <obj>)" sscanf path): a frame with no
+ * source line number falls through to the "in <obj>" pattern, sets
+ * *line_number to 0, and still returns the function name and object path.
+ * Traces to HLR-021 (Stack Frame Decoding) and HLR-040 (Non-Fatal
+ * Recovery from Malformed Input).
+ */
 static void test_extract_file_and_line_parses_entry_without_line_number(void **state)
 {
     (void)state;

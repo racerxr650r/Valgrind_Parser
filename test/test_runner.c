@@ -1,3 +1,24 @@
+/*
+ * test_runner.c
+ *
+ * Top-level driver for the cmocka unit + integration test suites.
+ * This file is responsible for two things:
+ *
+ *   1. Invoking the per-function unit-test groups defined under
+ *      test/unit/ (each of which annotates its tests with the
+ *      LLR identifiers from doc/LLRs.md and the HLR identifiers from
+ *      doc/HLRs.md).
+ *
+ *   2. Running a small set of black-box "integration" tests that
+ *      cross-check the actual on-disk vgp output for each of the
+ *      per-language error generators in test/integration/. These
+ *      tests verify the externally-observable behaviour of the
+ *      shipped vgp binary end-to-end.
+ *
+ * Each integration test is annotated below with the HLR(s) it
+ * exercises so a future traceability matrix can be built.
+ */
+
 #define _POSIX_C_SOURCE 200809L
 #include <stdarg.h>
 #include <stddef.h>
@@ -42,10 +63,9 @@ static const IntegrationTestCase integration_cases[] = {
 
 /* ---- Helper functions ---- */
 
-/*
- * Read an entire file into a malloc'd buffer. Returns NULL on failure.
- * Caller must free the returned buffer.
- */
+/* Read an entire file into a malloc'd buffer. Returns NULL on failure.
+ * Caller must free the returned buffer. (No requirement coverage; this
+ * is test-harness plumbing.) */
 static char *read_file_contents(const char *path)
 {
     FILE *f = fopen(path, "r");
@@ -72,12 +92,9 @@ static char *read_file_contents(const char *path)
     return buf;
 }
 
-/*
- * Search for a line matching the prefix in the file contents and
- * extract the integer value after it.
- * E.g., prefix = "* Total Errors: " extracts the number that follows.
- * Returns -1 if not found.
- */
+/* Search for a line matching the prefix in the file contents and
+ * extract the integer value after it. Returns -1 if not found.
+ * Test-harness plumbing only. */
 static int extract_int_after_prefix(const char *contents, const char *prefix)
 {
     const char *p = strstr(contents, prefix);
@@ -87,18 +104,14 @@ static int extract_int_after_prefix(const char *contents, const char *prefix)
     return atoi(p);
 }
 
-/*
- * Check that a valgrind log for vgp itself contains "ERROR SUMMARY: 0 errors".
- * Returns true if 0 errors found, false otherwise.
- */
+/* Check that a Valgrind log captured while running vgp itself contains
+ * "ERROR SUMMARY: 0 errors". Returns true if 0 errors found. */
 static bool vgp_itself_has_no_valgrind_errors(const char *contents)
 {
-    /* Find "ERROR SUMMARY:" and check for 0 errors */
     const char *p = strstr(contents, "ERROR SUMMARY:");
     if (!p)
         return false;
     p += strlen("ERROR SUMMARY:");
-    /* Skip spaces */
     while (*p == ' ')
         p++;
     return (*p == '0');
@@ -106,6 +119,11 @@ static bool vgp_itself_has_no_valgrind_errors(const char *contents)
 
 /* ---- Integration test functions ---- */
 
+/*
+ * Verifies that every per-language vgp output log opens with the
+ * "Parsing Valgrind Log File:" banner emitted by main().
+ * Traces to LLR-MAIN-06 and HLR-007 (Initial User Feedback).
+ */
 static void test_vgp_output_has_header(void **state)
 {
     (void)state;
@@ -123,6 +141,16 @@ static void test_vgp_output_has_header(void **state)
     }
 }
 
+/*
+ * Verifies that the "* Total Errors:" value reported by vgp matches the
+ * expected per-language range, confirming that the streaming parser
+ * recognises the same number of error blocks as the test corpus
+ * defines.
+ * Traces to LLR-PFES-03, LLR-PEH-03, LLR-CSNE-04 and
+ * HLR-016 (Error Block Detection),
+ * HLR-018 (Error Header Rendering),
+ * HLR-034 (Final Error Summary Output).
+ */
 static void test_vgp_output_error_counts(void **state)
 {
     (void)state;
@@ -147,6 +175,12 @@ static void test_vgp_output_error_counts(void **state)
     }
 }
 
+/*
+ * Verifies the "* Possible Leaks:" derived count, which exercises the
+ * subtraction of vgp's classified errors from Valgrind's reported
+ * total.
+ * Traces to LLR-PFES-03 and HLR-034 (Final Error Summary Output).
+ */
 static void test_vgp_output_leak_counts(void **state)
 {
     (void)state;
@@ -169,6 +203,15 @@ static void test_vgp_output_leak_counts(void **state)
     }
 }
 
+/*
+ * Verifies that languages whose Valgrind run produces a leak summary
+ * also produce both the "--- LEAK SUMMARY ---" and
+ * "--- FINAL COUNTS ---" markers in the vgp output.
+ * Traces to LLR-PSL-03, LLR-PFES-03 and
+ * HLR-031 (Leak Summary Recognition),
+ * HLR-033 (Leak Detail Formatting),
+ * HLR-034 (Final Error Summary Output).
+ */
 static void test_vgp_output_has_leak_summary(void **state)
 {
     (void)state;
@@ -191,6 +234,13 @@ static void test_vgp_output_has_leak_summary(void **state)
     }
 }
 
+/*
+ * Verifies the "[ERROR #N]" header format and that the count of headers
+ * matches the per-language expected error count.
+ * Traces to LLR-PEH-03, LLR-PEH-04 and
+ * HLR-016 (Error Block Detection),
+ * HLR-018 (Error Header Rendering).
+ */
 static void test_vgp_output_has_expected_error_blocks(void **state)
 {
     (void)state;
@@ -203,7 +253,6 @@ static void test_vgp_output_has_expected_error_blocks(void **state)
         if (!contents)
             fail_msg("Failed to read file: %s", path);
 
-        /* Count [ERROR #N] markers */
         int count = 0;
         const char *p = contents;
         while ((p = strstr(p, "[ERROR #")) != NULL) {
@@ -221,6 +270,15 @@ static void test_vgp_output_has_expected_error_blocks(void **state)
     }
 }
 
+/*
+ * Verifies that vgp itself, when run under Valgrind to parse each
+ * per-language log, produces zero Valgrind-detected errors. This is the
+ * dogfood test that backs the project's "no memory bugs" promise.
+ * Traces to HLR-008 (Resource Management),
+ * HLR-036 (Streaming Single-Pass Operation),
+ * HLR-037 (Bounded Line Buffer),
+ * HLR-041 (Standard-C Implementation).
+ */
 static void test_vgp_itself_no_valgrind_errors(void **state)
 {
     (void)state;

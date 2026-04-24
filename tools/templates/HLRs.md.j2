@@ -1,0 +1,59 @@
+{#-
+  HLRs.md.j2 — Jinja2 template for the High-Level Requirements document.
+
+  Owns ALL standard scaffolding: H1 title, version/date/author block,
+  per-section H2 headings, per-requirement bullet shape, and the
+  "*Trace:*" footer. Project-specific content comes from the <hlrs>
+  payload of doc/Project.xml.
+
+  Data shape (see tools/Project_xml_README.md for the full schema):
+
+      project.metadata.{title,version,date,author}
+      project.name           — long project name
+      project.short_name     — short project name
+      project.hlrs           — list of <section> objects, each:
+          .number            — section number (string)
+          .title             — section title
+          .intro             — markdown intro paragraph (may be empty)
+          .hlrs              — list of <hlr> objects:
+              .id            — e.g. "HLR-001"
+              .name          — short title (becomes the bold lead-in)
+              .text          — markdown body (verbatim)
+              .traces        — list of <trace target ref/> SimpleNamespaces
+
+  Trace rendering: each <trace target="SDD" ref="X.Y"/> renders as
+  "[SDD.md §X.Y](SDD.md)". The XML schema does not currently carry
+  GitHub anchors or section titles, so the link target is the bare
+  document. Extend the schema if richer trace links are needed.
+-#}
+{%- macro render_trace(tr) -%}
+{%- if tr.target == "SDD" -%}
+[SDD.md §{{ tr.ref }}](SDD.md)
+{%- elif tr.target == "HLR" -%}
+[{{ tr.ref }}](HLRs.md){% if tr.name %} ({{ tr.name }}){% endif %}
+{%- elif tr.target == "LLR" -%}
+[{{ tr.ref }}](LLRs.md)
+{%- else -%}
+{{ tr.target }} {{ tr.ref }}
+{%- endif -%}
+{%- endmacro -%}
+# {{ project.metadata.title }}
+
+**Version:** {{ project.metadata.version }}
+**Date:** {{ project.metadata.date }}
+**Author(s):** {{ project.metadata.author }}
+
+{% for sec in project.hlrs %}
+## {{ sec.number }}. {{ sec.title }}
+
+{% if sec.intro %}{{ sec.intro }}
+
+{% endif -%}
+{% for hlr in sec.hlrs %}
+*   <a id="{{ hlr.id }}"></a>**{{ hlr.id }}: {{ hlr.name }}.**
+    {{ hlr.text | indent(4) }}
+{% if hlr.traces %}    *Trace:* {% for tr in hlr.traces %}{{ render_trace(tr) }}{% if not loop.last %}, {% endif %}{% endfor %}.
+{% endif %}
+
+{% endfor %}
+{% endfor -%}

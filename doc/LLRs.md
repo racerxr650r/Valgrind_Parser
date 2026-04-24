@@ -1,434 +1,727 @@
 # Low-Level Requirements (LLRs) for Valgrind Parser (vgp)
 
-## Low-Level Requirements (LLRs) for the main() function in /home/john/Projects/Valgrind_Parser/main.c
+**Version:** 2.0
+**Date:** 4/21/2026
+**Author(s):** John Anderson
 
-These LLRs detail the specific operations and logic contained within the `main()` function.
+## 1. Introduction
 
-*   **LLR-M01 (Ref: HLR-001):** The `main()` function in `/home/john/Projects/Valgrind_Parser/main.c` shall be defined with the signature `int main(int argc, char *argv[])` and serve as the application's primary entry point.
-*   **LLR-M02 (Ref: N/A - General good practice):** As its first operational step, the `main()` function shall call `setlocale(LC_NUMERIC, "")` to ensure that numeric formatting (e.g., for thousands separators if used by `printf` with `%'d`) conforms to the user's locale settings.
-*   **LLR-M03 (Ref: HLR-002, HLR-004):** The `main()` function shall invoke the `parse_command_line(argc, argv)` function, passing the command-line arguments it received. This delegates the responsibility of parsing these arguments, populating the global `app_config` structure, handling the help option (`-h`), and exiting on argument-related errors.
-*   **LLR-M04 (Ref: HLR-003):** Subsequent to the return of `parse_command_line()` (which implies that argument parsing was successful and the program did not exit due to help request or argument error), the `main()` function shall retrieve the Valgrind log filename by assigning the value of `app_config.log_file` to a local `const char *filename` variable.
-*   **LLR-M05 (Ref: HLR-003):** The `main()` function shall attempt to open the file specified by the local `filename` variable in read-only mode (`"r"`) using the `fopen()` standard library function. The result of this operation (a `FILE*` pointer or `NULL`) shall be stored in a local `FILE *file` variable.
-*   **LLR-M06 (Ref: HLR-003, HLR-009, HLR-006):** The `main()` function shall check if the `file` variable is `NULL` immediately after the `fopen()` call.
-    *   If `file` is `NULL` (indicating an error in opening the file), an error message shall be printed to `stderr` using `fprintf`. This message must be formatted as: `"Error opening file '%s': %s\n"`, where the first `%s` is replaced by the `filename` and the second `%s` is replaced by the system error message string obtained from `strerror(errno)`.
-    *   Following the error message, the `main()` function shall return `EXIT_FAILURE`.
-*   **LLR-M07 (Ref: HLR-007):** If the `file` variable is not `NULL` (indicating the file was opened successfully), the `main()` function shall print an informational message to `stdout` using `printf`. This message must be formatted as: `"Parsing Valgrind Log File: %s\n"`, where `%s` is replaced by the `filename`.
-*   **LLR-M08 (Ref: HLR-005):** The `main()` function shall call the `process_log_file()` function (prototyped in `/home/john/Projects/Valgrind_Parser/vgp.h` and defined in `/home/john/Projects/Valgrind_Parser/vgp.c`), passing the `FILE *file` (the opened Valgrind log file) as its argument.
-*   **LLR-M09 (Ref: HLR-008):** Upon return from the `process_log_file()` function, the `main()` function shall call `fclose(file)` to close the Valgrind log file stream.
-*   **LLR-M10 (Ref: HLR-006):** After successfully closing the file, the `main()` function shall return `EXIT_SUCCESS` to indicate successful completion of the program.
+This document defines the low-level requirements (LLRs) for the
+implementation of `vgp`. Each LLR is bound to a specific function in
+[src/main.c](../src/main.c) or [src/vgp.c](../src/vgp.c) and traces back
+to one or more high-level requirements in [HLRs.md](HLRs.md).
 
-## Low-Level Requirements (LLRs) for the parse_command_line() function in /home/john/Projects/Valgrind_Parser/main.c
+### 1.1 Identifier Scheme
+LLR identifiers use a per-function prefix followed by a two-digit
+sequence number, e.g. `LLR-PCL-03` for the third LLR of
+`parse_command_line`. The prefixes used in this document are:
 
-These LLRs detail the specific operations and logic for parsing command-line arguments and configuring the application's behavior. It is assumed that this function operates on a globally accessible `app_config` structure.
+| Prefix | Function |
+| ------ | -------- |
+| `LLR-MAIN` | `main` ([src/main.c](../src/main.c)) |
+| `LLR-PCL` | `parse_command_line` ([src/main.c](../src/main.c)) |
+| `LLR-SVPP` | `strip_valgrind_pid_prefix` ([src/vgp.c](../src/vgp.c)) |
+| `LLR-IUCST` | `is_user_code_stack_trace` ([src/vgp.c](../src/vgp.c)) |
+| `LLR-GFN` | `get_function_name` ([src/vgp.c](../src/vgp.c)) |
+| `LLR-EFAL` | `extract_file_and_line` ([src/vgp.c](../src/vgp.c)) |
+| `LLR-PEH` | `print_error_header` ([src/vgp.c](../src/vgp.c)) |
+| `LLR-PLSL` | `print_leak_summary_line` ([src/vgp.c](../src/vgp.c)) |
+| `LLR-PFES` | `print_final_error_summary` ([src/vgp.c](../src/vgp.c)) |
+| `LLR-EC` | `execute_command` ([src/vgp.c](../src/vgp.c)) |
+| `LLR-PCO` | `parse_ctags_output` ([src/vgp.c](../src/vgp.c)) |
+| `LLR-PSF` | `print_source_function` ([src/vgp.c](../src/vgp.c)) |
+| `LLR-IPS` | `initialize_parse_state` ([src/vgp.c](../src/vgp.c)) |
+| `LLR-CSNE` | `check_start_new_error` ([src/vgp.c](../src/vgp.c)) |
+| `LLR-PSTL` | `process_stack_trace_line` ([src/vgp.c](../src/vgp.c)) |
+| `LLR-FEB` | `finalize_error_block` ([src/vgp.c](../src/vgp.c)) |
+| `LLR-PIEB` | `process_in_error_block` ([src/vgp.c](../src/vgp.c)) |
+| `LLR-PSL` | `process_summary_lines` ([src/vgp.c](../src/vgp.c)) |
+| `LLR-PLF` | `process_log_file` ([src/vgp.c](../src/vgp.c)) |
+| `LLR-GBL` | Module globals ([src/vgp.c](../src/vgp.c)) |
 
-*   **LLR-PCL01 (Ref: HLR-002):** The `parse_command_line()` function shall be defined with the signature `void parse_command_line(int argc, char *argv[])`.
-*   **LLR-PCL02 (Ref: HLR-002):** The `parse_command_line()` function shall initialize all boolean flag members of the global `app_config` structure (e.g., `trace_enabled`, `source_enabled`, `leaks_enabled`, `verbose_enabled`, `help_enabled`) to `false` before parsing any arguments.
-*   **LLR-PCL03 (Ref: HLR-002):** The `parse_command_line()` function shall initialize the `app_config.log_file` member to `NULL` before parsing any arguments.
-*   **LLR-PCL04 (Ref: HLR-002):** The `parse_command_line()` function shall use a `while` loop in conjunction with the `getopt(argc, argv, "tslvh")` standard library function to iterate through and process command-line options.
-*   **LLR-PCL05 (Ref: HLR-002):** Within the `getopt()` loop, a `switch` statement on the character returned by `getopt()` shall be used to handle recognized options:
-    *   **Case 't':** The `app_config.trace_enabled` member shall be set to `true`.
-    *   **Case 's':** The `app_config.source_enabled` member shall be set to `true`.
-    *   **Case 'l':** The `app_config.leaks_enabled` member shall be set to `true`.
-    *   **Case 'v':** The `app_config.verbose_enabled` member shall be set to `true`. Additionally, `app_config.trace_enabled`, `app_config.source_enabled`, and `app_config.leaks_enabled` shall also be set to `true` as the verbose option implies these.
-    *   **Case 'h':** The `app_config.help_enabled` member shall be set to `true`.
-    *   **Case '?':** (Handles unknown options or missing option arguments from `getopt()`) The `print_usage(argv[0])` function shall be called, and the program shall then exit with `EXIT_FAILURE`.
-*   **LLR-PCL06 (Ref: HLR-004, HLR-006):** After the `getopt()` loop completes, if `app_config.help_enabled` is `true`, the `print_usage(argv[0])` function shall be called, and the program shall then exit with `EXIT_SUCCESS`.
-*   **LLR-PCL07 (Ref: HLR-002):** After the `getopt()` loop and help check, the function shall check if the number of remaining non-option arguments (`argc - optind`) is exactly equal to `1`.
-*   **LLR-PCL08 (Ref: HLR-002, HLR-004, HLR-006):** If `argc - optind` is not equal to `1`:
-    *   An error message "Error: A single Valgrind log filename is required.\n" shall be printed to `stderr`.
-    *   The `print_usage(argv[0])` function shall be called.
-    *   The program shall then exit with `EXIT_FAILURE`.
-*   **LLR-PCL09 (Ref: HLR-002):** If `argc - optind` is equal to `1`, the `app_config.log_file` member shall be assigned the value of `argv[optind]` (the first non-option argument, which is the filename).
-*   **LLR-PCL10 (Ref: N/A - Internal consistency):** The `parse_command_line()` function shall not return a value (i.e., its return type is `void`) as it either successfully populates the global `app_config` or causes the program to exit.
+LLR IDs are stable. Updates that change behaviour replace the existing
+ID's text in place; new behaviour takes the next unused number for that
+function.
 
-## Low-Level Requirements (LLRs) for the is_user_code_stack_trace() function in /home/john/Projects/Valgrind_Parser/vgp.c
+### 1.2 Traceability
+Every LLR carries a `*Trace:*` line citing the HLR identifiers from
+[HLRs.md](HLRs.md) (with the requirement's short name) that it
+implements. This is the structure used for the forthcoming traceability
+matrix.
 
-These LLRs detail the specific logic for determining if a given line from a Valgrind log represents a stack trace frame originating from user-written code.
+## 2. Module Globals ([src/vgp.c](../src/vgp.c))
 
-*   **LLR-IUCST01 (Ref: HLR-014):** The `is_user_code_stack_trace()` function shall be defined with the signature `bool is_user_code_stack_trace(const char *line)`.
-*   **LLR-IUCST02 (Ref: HLR-014):** The function shall first check if the input `line` string starts with the Valgrind stack trace prefix "   at " (6 characters) using `strncmp()`.
-*   **LLR-IUCST03 (Ref: HLR-014):** If the `line` does not start with "   at ", the function shall then check if it starts with the Valgrind stack trace prefix "   by " (6 characters) using `strncmp()`.
-*   **LLR-IUCST04 (Ref: HLR-014):** If the `line` does not start with either "   at " or "   by ", the function shall immediately return `false`.
-*   **LLR-IUCST05 (Ref: HLR-014):** If the line has a valid stack trace prefix, the function shall then iterate through the `USER_CODE_EXTENSIONS` global array (defined in `/home/john/Projects/Valgrind_Parser/vgp.c`). The iteration shall continue as long as the current array element is not `NULL`.
-*   **LLR-IUCST06 (Ref: HLR-014):** For each extension string in `USER_CODE_EXTENSIONS`, the function shall use `strstr(line, USER_CODE_EXTENSIONS[i])` to check if the extension is present as a substring within the input `line`.
-*   **LLR-IUCST07 (Ref: HLR-014):** If any user code extension is found in the `line`, a local boolean flag (e.g., `found_user_extension`) shall be set to `true`, and the iteration through `USER_CODE_EXTENSIONS` shall terminate immediately (e.g., using `break`).
-*   **LLR-IUCST08 (Ref: HLR-014):** After checking all `USER_CODE_EXTENSIONS`, if the `found_user_extension` flag remains `false`, the function shall return `false`.
-*   **LLR-IUCST09 (Ref: HLR-014):** If a user code extension was found, the function shall then iterate through the `IGNORE_PATHS` global array (defined in `/home/john/Projects/Valgrind_Parser/vgp.c`). The iteration shall continue as long as the current array element is not `NULL`.
-*   **LLR-IUCST10 (Ref: HLR-014):** For each path string in `IGNORE_PATHS`, the function shall use `strstr(line, IGNORE_PATHS[i])` to check if the ignored path is present as a substring within the input `line`.
-*   **LLR-IUCST11 (Ref: HLR-014):** If any ignored path is found in the `line`, the function shall immediately return `false`.
-*   **LLR-IUCST12 (Ref: HLR-014):** If the input `line` starts with a valid stack trace prefix, contains a user code extension, and does not contain any of the ignored paths, the function shall return `true`.
+*   <a id="LLR-GBL-01"></a>**LLR-GBL-01** — A file-scope `AppConfig app_config` shall be defined
+    with all boolean flags initialised to `false` and `log_file`
+    initialised to `NULL`.
+    *Trace:* HLR-002 (Argument Parsing and Validation), HLR-011 (Configurable Output Sections), HLR-013 (No Hidden Configuration).
 
-## Low-Level Requirements (LLRs) for the strip_valgrind_pid_prefix() function in /home/john/Projects/Valgrind_Parser/vgp.c
+*   <a id="LLR-GBL-02"></a>**LLR-GBL-02** — A `NULL`-terminated `const char *USER_CODE_EXTENSIONS[]`
+    array shall be defined containing the file extensions recognised as
+    user code: `".c"`, `".cpp"`, `".h"`, `".hpp"`, `".C"`, `".CPP"`,
+    `".H"`, `".HPP"`, `".cc"`, `".hh"`, `".cxx"`, `".hxx"`, `".f90"`,
+    `".f"`, `".F"`, `".for"`, `".ada"`, `".ads"`, `".adb"`, `".rs"`.
+    *Trace:* HLR-022 (User-Code Classification), HLR-029 (Multi-Language Source Support).
 
-These LLRs detail the specific logic for identifying and removing the Valgrind process ID (PID) prefix (e.g., `==<PID>== `) from a given log line.
+*   <a id="LLR-GBL-03"></a>**LLR-GBL-03** — A `NULL`-terminated `const char *IGNORE_PATHS[]`
+    array shall be defined containing the path fragments `"/usr/"`,
+    `"/lib/"`, and `"vg_"`.
+    *Trace:* HLR-022 (User-Code Classification).
 
-*   **LLR-SVPP01 (Ref: HLR-010):** The `strip_valgrind_pid_prefix()` function shall be defined with the signature `char *strip_valgrind_pid_prefix(char *line)`.
-*   **LLR-SVPP02 (Ref: HLR-010):** The function shall first search for the initial "==" sequence in the input `line` string using `strstr()`.
-*   **LLR-SVPP03 (Ref: HLR-010):** If the `strstr()` call in LLR-SVPP02 returns `NULL` (meaning "==" is not found), the function shall immediately return the original `line` pointer without modification.
-*   **LLR-SVPP04 (Ref: HLR-010):** If "==" is found, a temporary pointer shall be advanced by 2 characters to move past this initial "==".
-*   **LLR-SVPP05 (Ref: HLR-010):** The function shall then skip any subsequent whitespace characters (checked using `isspace()`) by advancing the temporary pointer.
-*   **LLR-SVPP06 (Ref: HLR-010):** After skipping whitespace, the function shall check if the character at the current temporary pointer position is a digit (checked using `isdigit()`).
-*   **LLR-SVPP07 (Ref: HLR-010):** If the character is not a digit, the function shall immediately return the original `line` pointer, as the format does not match the expected PID prefix.
-*   **LLR-SVPP08 (Ref: HLR-010):** If the character is a digit, the function shall continue to advance the temporary pointer as long as subsequent characters are digits, effectively skipping the entire PID number.
-*   **LLR-SVPP09 (Ref: HLR-010):** After skipping all digits of the PID, the function shall again skip any subsequent whitespace characters by advancing the temporary pointer.
-*   **LLR-SVPP10 (Ref: HLR-010):** The function shall then check if the characters at the current temporary pointer position match the sequence "== " (three characters: equals, equals, space) using `strncmp()`.
-*   **LLR-SVPP11 (Ref: HLR-010):** If the sequence "== " is not found, the function shall immediately return the original `line` pointer, as the format does not match the expected end of the PID prefix.
-*   **LLR-SVPP12 (Ref: HLR-010):** If the "== " sequence is found, the temporary pointer shall be advanced by 3 characters to move past it.
-*   **LLR-SVPP13 (Ref: HLR-010):** The function shall then return the final value of the temporary pointer, which now points to the beginning of the actual log message content after the stripped prefix.
+*   <a id="LLR-GBL-04"></a>**LLR-GBL-04** — A `NULL`-terminated `const char *ERROR_KEYWORDS[]`
+    array shall be defined containing at least the substrings
+    `"Invalid read"`, `"Invalid write"`,
+    `"depends on uninitialised value"`, `"Invalid free"`,
+    `"Mismatched free"`, `"Source and destination overlap"`, and
+    `"Invalid usage of address"`.
+    *Trace:* HLR-016 (Error Block Detection).
 
-## Low-Level Requirements (LLRs) for the get_function_name() function in /home/john/Projects/Valgrind_Parser/vgp.c
+## 3. `main` ([src/main.c](../src/main.c))
 
-These LLRs detail the specific logic for parsing a Valgrind stack trace line and reformatting it to show the function name, base filename, and line number.
+*   <a id="LLR-MAIN-01"></a>**LLR-MAIN-01** — `main` shall be defined with the signature
+    `int main(int argc, char *argv[])`.
+    *Trace:* HLR-001 (Command-Line Interface Provision).
 
-*   **LLR-GFN01 (Ref: HLR-013):** The `get_function_name()` function shall be defined with the signature `char *get_function_name(const char *line, char *newline)`.
-*   **LLR-GFN02 (Ref: HLR-013):** The function shall declare and initialize a local character array `function` of size `MAX_LINE_LENGTH` (defined in `/home/john/Projects/Valgrind_Parser/vgp.h`) with the default string "?".
-*   **LLR-GFN03 (Ref: HLR-013):** The function shall declare and initialize a local character array `filename` of size `MAX_LINE_LENGTH` with the default string "?".
-*   **LLR-GFN04 (Ref: HLR-013):** The function shall declare and initialize a local integer variable `line_number` to `0`.
-*   **LLR-GFN05 (Ref: HLR-013):** The function shall calculate the length of the input `line` string using `strlen()` and store it in a local integer variable (e.g., `length`).
-*   **LLR-GFN06 (Ref: HLR-013):** The function shall use `sscanf()` with the input `line` and the format string `"%*s %*s %[^ ] (%[^:]:%d)"` to attempt to parse and populate:
-    *   The `function` array (extracting characters up to the first space after skipping two initial strings like "at" and the address).
-    *   The `filename` array (extracting characters up to the colon `:` within the parentheses).
-    *   The `line_number` integer variable (extracting digits after the colon).
-*   **LLR-GFN07 (Ref: HLR-013):** After the `sscanf()` call, the function shall check if the `line_number` variable is non-zero. (Note: `sscanf`'s return value indicating the number of successful assignments would be a more robust check, but the current code checks `line_number` itself).
-*   **LLR-GFN08 (Ref: HLR-013):** If `line_number` is non-zero (indicating a successful parse of the line number component):
-    *   The function shall call `basename()` (from `libgen.h`) with the parsed `filename` as input to obtain only the file's base name.
-    *   The function shall use `snprintf()` to format the output string into the `newline` buffer. The format shall be `"%s(%s:%d)\n"`, using the parsed `function`, the result of `basename(filename)`, and the parsed `line_number`.
-    *   The `size` argument for `snprintf()` shall be the `length` calculated in LLR-GFN05 to prevent buffer overflows in `newline` (though `newline` should ideally be sized appropriately by the caller or have a known max size).
-*   **LLR-GFN09 (Ref: HLR-013):** If `line_number` is zero (indicating the line number component was not successfully parsed or was parsed as zero):
-    *   The function shall use `snprintf()` to format the output string into the `newline` buffer as `"?\?(?:0)\n"`.
-    *   The `size` argument for `snprintf()` shall be the `length` calculated in LLR-GFN05.
-*   **LLR-GFN10 (Ref: HLR-013):** The function shall return the pointer to the `newline` buffer.
+*   <a id="LLR-MAIN-02"></a>**LLR-MAIN-02** — As its first executable statement, `main` shall
+    call `setlocale(LC_NUMERIC, "")`.
+    *Trace:* HLR-005 (Locale Initialisation).
 
-## Low-Level Requirements (LLRs) for the print_error_header() function in /home/john/Projects/Valgrind_Parser/vgp.c
+*   <a id="LLR-MAIN-03"></a>**LLR-MAIN-03** — `main` shall invoke `parse_command_line(argc, argv)`
+    to populate the global `app_config` and to dispatch the help/error
+    exit paths.
+    *Trace:* HLR-002 (Argument Parsing and Validation), HLR-003 (Usage and Help Information Display).
 
-These LLRs detail the specific operations for printing a formatted header at the beginning of a detected Valgrind error block.
+*   <a id="LLR-MAIN-04"></a>**LLR-MAIN-04** — `main` shall capture `app_config.log_file` into a
+    local `const char *filename` and shall call `fopen(filename, "r")`
+    to obtain a `FILE *` for the log.
+    *Trace:* HLR-004 (Input Log File Handling).
 
-*   **LLR-PEH01 (Ref: HLR-012):** The `print_error_header()` function shall be defined with the signature `void print_error_header(const char *error_type, ParseState *state)`.
-*   **LLR-PEH02 (Ref: HLR-012):** The function shall first print a horizontal separator line "----------------------------------------\n" to `stdout` using `printf()`.
-*   **LLR-PEH03 (Ref: HLR-012, HLR-021):** The function shall increment the `state->error_count` member by one.
-*   **LLR-PEH04 (Ref: HLR-012):** The function shall then print a formatted string to `stdout` using `printf()`. This string shall be `"[ERROR #%d] "`, where `%d` is replaced by the new value of `state->error_count`.
-*   **LLR-PEH05 (Ref: HLR-012):** The function shall calculate the length of the input `error_type` string using `strlen()`.
-*   **LLR-PEH06 (Ref: HLR-012):** The function shall check if the last character of the `error_type` string (at index `length - 1`) is a newline character (`\n`).
-*   **LLR-PEH07 (Ref: HLR-012):**
-    *   If the last character of `error_type` is a newline, the function shall print the `error_type` string to `stdout` as is (e.g., using `printf("%s", error_type)`).
-    *   If the last character of `error_type` is not a newline, the function shall print the `error_type` string to `stdout` followed by a newline character (e.g., using `printf("%s\n", error_type)`).
-*   **LLR-PEH08 (Ref: HLR-012, HLR-025):** The function shall check if either the `app_config.print_stack` global boolean flag is `true` OR the `app_config.verbose` global boolean flag is `true`.
-*   **LLR-PEH09 (Ref: HLR-012, HLR-025):** If the condition in LLR-PEH08 is met, the function shall print the string "Call Stack:\n" to `stdout` using `printf()`.
+*   <a id="LLR-MAIN-05"></a>**LLR-MAIN-05** — If `fopen` returns `NULL`, `main` shall write the
+    diagnostic `"Error opening file '%s': %s\n"` (with `filename` and
+    `strerror(errno)`) to `stderr` and shall return `EXIT_FAILURE`.
+    *Trace:* HLR-004 (Input Log File Handling), HLR-009 (Application Exit Status), HLR-010 (Application-Level Error Reporting).
 
-## Low-Level Requirements (LLRs) for the print_leak_summary_line() function in /home/john/Projects/Valgrind_Parser/vgp.c
+*   <a id="LLR-MAIN-06"></a>**LLR-MAIN-06** — On successful `fopen`, `main` shall print
+    `"Parsing Valgrind Log File: %s\n"` (with `filename`) to `stdout`
+    before invoking the parser.
+    *Trace:* HLR-007 (Initial User Feedback).
 
-These LLRs detail the specific operations for parsing and printing a single line from Valgrind's leak summary section.
+*   <a id="LLR-MAIN-07"></a>**LLR-MAIN-07** — `main` shall call `process_log_file(file)` exactly
+    once with the open `FILE *`.
+    *Trace:* HLR-006 (Parser Module Invocation).
 
-*   **LLR-PLSL01 (Ref: HLR-020):** The `print_leak_summary_line()` function shall be defined with the signature `void print_leak_summary_line(const char *line, const char *leak_type)`.
-*   **LLR-PLSL02 (Ref: HLR-020):** The function shall declare two local integer variables, `bytes` and `blocks`, and initialize them to `0`.
-*   **LLR-PLSL03 (Ref: HLR-020, HLR-022):** The function shall attempt to parse the input `line` string using `sscanf()` with the format string `"%*[^:]: %'d %*s %*s %'d"`.
-    *   This format string is intended to:
-        *   Skip all characters up to and including the first colon (`:`).
-        *   Read an integer (respecting locale for thousands separators due to `'`) into the `bytes` variable.
-        *   Skip the next string (e.g., "bytes").
-        *   Skip the subsequent string (e.g., "in").
-        *   Read an integer (respecting locale for thousands separators) into the `blocks` variable.
-*   **LLR-PLSL04 (Ref: HLR-020):** The function shall check if the return value of the `sscanf()` call (from LLR-PLSL03) is equal to `2`, indicating that both `bytes` and `blocks` were successfully parsed and assigned.
-*   **LLR-PLSL05 (Ref: HLR-020):** If the `sscanf()` call successfully parsed 2 items:
-    *   The function shall print a formatted string to `stdout` using `printf()`.
-    *   The format of this string shall be `"* %s: %d bytes in %d blocks\n"`, where the first `%s` is replaced by the input `leak_type` string, the first `%d` by the parsed `bytes` value, and the second `%d` by the parsed `blocks` value.
-*   **LLR-PLSL06 (Ref: HLR-022):** If the `sscanf()` call did not successfully parse 2 items (i.e., its return value was not `2`):
-    *   The function shall calculate the length of the input `line` string using `strlen()`.
-    *   The function shall check if the last character of the `line` string (at index `length - 1`) is a newline character (`\n`).
-*   **LLR-PLSL07 (Ref: HLR-022):** If `sscanf()` failed and the last character of `line` is a newline character:
-    *   The function shall print the original `line` string to `stdout` as is (e.g., using `printf("%s", line)`).
-*   **LLR-PLSL08 (Ref: HLR-022):** If `sscanf()` failed and the last character of `line` is not a newline character:
-    *   The function shall print the original `line` string to `stdout` followed by a newline character (e.g., using `printf("%s\n", line)`).
+*   <a id="LLR-MAIN-08"></a>**LLR-MAIN-08** — On return from `process_log_file`, `main` shall
+    call `fclose(file)`.
+    *Trace:* HLR-008 (Resource Management).
 
-## Low-Level Requirements (LLRs) for the print_final_error_summary() function in /home/john/Projects/Valgrind_Parser/vgp.c
+*   <a id="LLR-MAIN-09"></a>**LLR-MAIN-09** — `main` shall return `EXIT_SUCCESS` after a
+    successful `fclose`.
+    *Trace:* HLR-009 (Application Exit Status).
 
-These LLRs detail the specific operations for parsing Valgrind's "ERROR SUMMARY:" line and printing a consolidated final count of errors and potential leaks.
+## 4. `parse_command_line` ([src/main.c](../src/main.c))
 
-*   **LLR-PFES01 (Ref: HLR-021):** The `print_final_error_summary()` function shall be defined with the signature `void print_final_error_summary(const char *line, ParseState *state)`.
-*   **LLR-PFES02 (Ref: HLR-021):** The function shall declare a local integer variable `error_count` and initialize it to `0`.
-*   **LLR-PFES03 (Ref: HLR-021, HLR-022):** The function shall attempt to parse the input `line` string using `sscanf()` with the format string `"%*[^:]: %'d"`.
-    *   This format string is intended to:
-        *   Skip all characters up to and including the first colon (`:`).
-        *   Read an integer (respecting locale for thousands separators due to `'`) into the `error_count` variable.
-*   **LLR-PFES04 (Ref: HLR-021):** The function shall check if the return value of the `sscanf()` call (from LLR-PFES03) is equal to `1`, indicating that the `error_count` was successfully parsed and assigned.
-*   **LLR-PFES05 (Ref: HLR-021):** If the `sscanf()` call successfully parsed 1 item:
-    *   The function shall print a header string "\n--- FINAL COUNTS ---\n" to `stdout` using `printf()`.
-    *   The function shall print a formatted string to `stdout` using `printf()`. The format shall be `"* Total Errors: %d\n"`, where `%d` is replaced by the value of `state->error_count` (the count of errors processed by this parser).
-    *   The function shall print a formatted string to `stdout` using `printf()`. The format shall be `"* Possible Leaks: %d\n"`, where `%d` is replaced by the result of `error_count - state->error_count` (the difference between Valgrind's total error/leak count and this parser's specific error count).
-*   **LLR-PFES06 (Ref: HLR-022):** If the `sscanf()` call did not successfully parse 1 item (i.e., its return value was not `1`):
-    *   The function shall calculate the length of the input `line` string using `strlen()`.
-    *   The function shall check if the last character of the `line` string (at index `length - 1`) is a newline character (`\n`).
-*   **LLR-PFES07 (Ref: HLR-022):** If `sscanf()` failed and the last character of `line` is a newline character:
-    *   The function shall print the original `line` string to `stdout` as is (e.g., using `printf("%s", line)`).
-*   **LLR-PFES08 (Ref: HLR-022):** If `sscanf()` failed and the last character of `line` is not a newline character:
-    *   The function shall print the original `line` string to `stdout` followed by a newline character (e.g., using `printf("%s\n", line)`).
+The current implementation is a hand-rolled `argv` walker; it does not
+use `getopt`.
 
-## Low-Level Requirements (LLRs) for the extract_file_and_line() function in /home/john/Projects/Valgrind_Parser/vgp.c
+*   <a id="LLR-PCL-01"></a>**LLR-PCL-01** — `parse_command_line` shall be defined with the
+    signature `void parse_command_line(int argc, char *argv[])`.
+    *Trace:* HLR-002 (Argument Parsing and Validation).
 
-These LLRs detail the specific logic for parsing a Valgrind stack trace line to extract the filename, function name, and line number.
+*   <a id="LLR-PCL-02"></a>**LLR-PCL-02** — The function shall iterate over `argv[i]` for `i`
+    from `1` to `argc-1` inclusive.
+    *Trace:* HLR-002 (Argument Parsing and Validation).
 
-*   **LLR-EFAL01 (Ref: HLR-013):** The `extract_file_and_line()` function shall be defined with the signature `bool extract_file_and_line(const char *line, char *filename, char *function_name, int *line_number)`.
-*   **LLR-EFAL02 (Ref: HLR-013):** The function shall first check if any of the input pointers (`line`, `filename`, `function_name`, `line_number`) are `NULL`. If any are `NULL`, the function shall immediately return `false`.
-*   **LLR-EFAL03 (Ref: HLR-013):** The function shall declare local temporary character arrays `temp_filename` and `temp_function`, each of size `MAX_LINE_LENGTH` (defined in `/home/john/Projects/Valgrind_Parser/vgp.h`).
-*   **LLR-EFAL04 (Ref: HLR-013):** The function shall first attempt to parse the input `line` using `sscanf()` with the format string `"%*[^:]: %[^(]( %[^:]:%d)"`. This format attempts to capture:
-    *   A function name (characters before an opening parenthesis, stored in `temp_function`).
-    *   A filename (characters between the opening parenthesis and a colon, stored in `temp_filename`).
-    *   A line number (integer after the colon, stored in the `line_number` pointer).
-*   **LLR-EFAL05 (Ref: HLR-013, HLR-016, HLR-017):** If the `sscanf()` call in LLR-EFAL04 returns `3` (indicating all three components were successfully parsed and assigned):
-    *   A pointer `filename_ptr` shall be assigned the result of `strtok(temp_filename, " \t")` to attempt to remove leading whitespace from `temp_filename`.
-    *   `filename_ptr` shall then be reassigned the result of `strtok(filename_ptr, " \t")` to attempt to remove trailing whitespace from the (now potentially modified) `temp_filename`.
-    *   The content pointed to by `filename_ptr` (or the modified `temp_filename`) shall be copied into the output `filename` buffer using `strcpy()`.
-    *   A pointer `functionname_ptr` shall be assigned the result of `strtok(temp_function, " \t")` to attempt to remove leading whitespace from `temp_function`.
-    *   `functionname_ptr` shall then be reassigned the result of `strtok(functionname_ptr, " \t")` to attempt to remove trailing whitespace from the (now potentially modified) `temp_function`.
-    *   The content pointed to by `functionname_ptr` (or the modified `temp_function`) shall be copied into the output `function_name` buffer using `strcpy()`.
-    *   The function shall return `true`.
-*   **LLR-EFAL06 (Ref: HLR-013, HLR-016):** If the `sscanf()` call in LLR-EFAL04 did not return `3`, the function shall then attempt to parse the input `line` using `sscanf()` with the format string `"%*[^:]: %[^:]:%d"`. This format attempts to capture:
-    *   A filename (characters before a colon, stored in `temp_filename`).
-    *   A line number (integer after the colon, stored in the `line_number` pointer).
-*   **LLR-EFAL07 (Ref: HLR-013, HLR-016):** If the `sscanf()` call in LLR-EFAL06 returns `2` (indicating filename and line number were successfully parsed):
-    *   The content of `temp_filename` shall be copied into the output `filename` buffer using `strcpy()`.
-    *   The output `function_name` buffer shall be set to an empty string using `strcpy(function_name, "")`.
-    *   The function shall return `true`.
-*   **LLR-EFAL08 (Ref: HLR-013, HLR-017):** If the `sscanf()` call in LLR-EFAL06 did not return `2`, the function shall then attempt to parse the input `line` using `sscanf()` with the format string `"%*[^:]: %[^(](in %[^)])"`. This format attempts to capture:
-    *   A function name (characters before an opening parenthesis, stored in `temp_function`).
-    *   A filename (characters within "in (...)" part, stored in `temp_filename`).
-*   **LLR-EFAL09 (Ref: HLR-013, HLR-017):** If the `sscanf()` call in LLR-EFAL08 returns `2` (indicating function name and filename were successfully parsed):
-    *   A pointer `filename_ptr` shall be assigned the result of `strtok(temp_filename, " \t")` to attempt to remove leading whitespace from `temp_filename`.
-    *   `filename_ptr` shall then be reassigned the result of `strtok(filename_ptr, " \t")` to attempt to remove trailing whitespace from the (now potentially modified) `temp_filename`.
-    *   The content pointed to by `filename_ptr` (or the modified `temp_filename`) shall be copied into the output `filename` buffer using `strcpy()`.
-    *   A pointer `functionname_ptr` shall be assigned the result of `strtok(temp_function, " \t")` to attempt to remove leading whitespace from `temp_function`.
-    *   `functionname_ptr` shall then be reassigned the result of `strtok(functionname_ptr, " \t")` to attempt to remove trailing whitespace from the (now potentially modified) `temp_function`.
-    *   The content pointed to by `functionname_ptr` (or the modified `temp_function`) shall be copied into the output `function_name` buffer using `strcpy()`.
-    *   The integer pointed to by `line_number` shall be set to `0`.
-    *   The function shall return `true`.
-*   **LLR-EFAL10 (Ref: HLR-013):** If none of the preceding `sscanf()` attempts result in a successful parse (as defined by their respective LLRs), the function shall return `false`.
+*   <a id="LLR-PCL-03"></a>**LLR-PCL-03** — When `argv[i][0] == '-'`, the function shall
+    dispatch on `argv[i][1]` and set the corresponding `app_config`
+    flag:
+    *   `'v'` -> `app_config.verbose = true`.
+    *   `'s'` -> `app_config.print_source = true`.
+    *   `'l'` -> `app_config.print_leak_summary = true`.
+    *   `'t'` -> `app_config.print_stack = true`.
+    *Trace:* HLR-002 (Argument Parsing and Validation), HLR-011 (Configurable Output Sections).
 
-## Low-Level Requirements (LLRs) for the execute_command() function in /home/john/Projects/Valgrind_Parser/vgp.c
+*   <a id="LLR-PCL-04"></a>**LLR-PCL-04** — When `argv[i][1] == 'h'`, the function shall print a
+    usage block to `stdout` listing each supported option (`-v`, `-s`,
+    `-l`, `-t`, `-h`) with a short description and shall call
+    `exit(EXIT_SUCCESS)`.
+    *Trace:* HLR-003 (Usage and Help Information Display), HLR-009 (Application Exit Status).
 
-These LLRs detail the specific logic for executing an external shell command and capturing its first line of standard output. This function is primarily used to interact with `ctags` for function boundary detection.
+*   <a id="LLR-PCL-05"></a>**LLR-PCL-05** — Any option character not in the set
+    `{'v','s','l','t','h'}` shall cause the function to write
+    `"Unknown option: %s\n"` to `stderr` and call `exit(EXIT_FAILURE)`.
+    *Trace:* HLR-002 (Argument Parsing and Validation), HLR-009 (Application Exit Status), HLR-010 (Application-Level Error Reporting).
 
-*   **LLR-EC01 (Ref: HLR-017):** The `execute_command()` function shall be defined with the signature `bool execute_command(const char *command, char *output, size_t output_size)`.
-*   **LLR-EC02 (Ref: HLR-017):** The function shall first validate its input arguments. It shall check if the `command` pointer is `NULL`, if the `output` pointer is `NULL`, or if `output_size` is `0`.
-*   **LLR-EC03 (Ref: HLR-017):** If any of the conditions in LLR-EC02 are met (i.e., an invalid argument is detected), the function shall immediately return `false`.
-*   **LLR-EC04 (Ref: HLR-017):** The function shall call `popen()` with the provided `command` string and the mode `"r"` (read) to execute the command and open a pipe to its standard output. The `FILE*` pointer returned by `popen()` shall be stored.
-*   **LLR-EC05 (Ref: HLR-017, HLR-024):** The function shall check if the `FILE*` pointer returned by `popen()` is `NULL`.
-    *   If it is `NULL` (indicating `popen()` failed), the function shall call `perror("popen")` to print a system error message to `stderr`.
-    *   Following the `perror()` call, the function shall return `false`.
-*   **LLR-EC06 (Ref: HLR-017):** If `popen()` was successful, the function shall call `fgets()` to read at most `output_size - 1` characters from the pipe (associated with the `FILE*` pointer from `popen()`) into the `output` buffer.
-*   **LLR-EC07 (Ref: HLR-017, HLR-024):** The function shall check if the `fgets()` call returned `NULL` (indicating an error or end-of-file before any characters were read).
-    *   If `fgets()` returned `NULL`, the function shall then check `ferror()` on the `FILE*` pointer to determine if a read error occurred.
-    *   If `ferror()` returns a non-zero value (indicating a read error), the function shall call `perror("fgets")` to print a system error message to `stderr`.
-    *   Regardless of whether `ferror()` indicated an error, if `fgets()` returned `NULL`, the function shall call `pclose()` on the `FILE*` pointer and then return `false`.
-*   **LLR-EC08 (Ref: HLR-017):** After successfully reading from the pipe (or if `fgets` returned `NULL` but no read error occurred, which implies the command produced no output or only an empty line), the function shall call `pclose()` on the `FILE*` pointer to close the pipe and wait for the command to terminate.
-*   **LLR-EC09 (Ref: HLR-017):** If all operations up to closing the pipe were successful (specifically, if `popen` succeeded and `fgets` did not indicate a stream error that caused an early return), the function shall return `true`. (Note: The current implementation returns `true` even if `fgets` returns `NULL` as long as `ferror` is not set, implying an empty output is not a failure of `execute_command` itself).
+*   <a id="LLR-PCL-06"></a>**LLR-PCL-06** — When `argv[i][0] != '-'`, the token shall be treated
+    as the positional log-file path. If `app_config.log_file` is
+    `NULL`, the token shall be assigned to it.
+    *Trace:* HLR-002 (Argument Parsing and Validation).
 
-## Low-Level Requirements (LLRs) for the parse_ctags_output() function in /home/john/Projects/Valgrind_Parser/vgp.c
+*   <a id="LLR-PCL-07"></a>**LLR-PCL-07** — If a non-option token is encountered while
+    `app_config.log_file` is already non-`NULL`, the function shall
+    write `"Multiple log files specified: %s and %s\n"` (with the prior
+    and current paths) to `stderr` and call `exit(EXIT_FAILURE)`.
+    *Trace:* HLR-002 (Argument Parsing and Validation), HLR-009 (Application Exit Status), HLR-010 (Application-Level Error Reporting).
 
-These LLRs detail the specific logic for parsing the output string from a `ctags` command to extract the start and end line numbers of a function definition.
+*   <a id="LLR-PCL-08"></a>**LLR-PCL-08** — After the loop, if `app_config.log_file` is `NULL`,
+    the function shall write `"No log file specified. Use -h for help.\n"`
+    to `stderr` and call `exit(EXIT_FAILURE)`.
+    *Trace:* HLR-002 (Argument Parsing and Validation), HLR-003 (Usage and Help Information Display), HLR-009 (Application Exit Status).
 
-*   **LLR-PCO01 (Ref: HLR-017):** The `parse_ctags_output()` function shall be defined with the signature `bool parse_ctags_output(const char *ctags_output, int *start_line, int *end_line)`.
-*   **LLR-PCO02 (Ref: HLR-017):** The function shall first check if any of the input pointers (`ctags_output`, `start_line`, `end_line`) are `NULL`.
-*   **LLR-PCO03 (Ref: HLR-017, HLR-024):** If any of the input pointers checked in LLR-PCO02 are `NULL`, the function shall print the error message "Error: Invalid arguments to parse_ctags_output.\n" to `stderr` using `fprintf()`.
-*   **LLR-PCO04 (Ref: HLR-017):** If any of the input pointers checked in LLR-PCO02 are `NULL`, the function shall immediately return `false`.
-*   **LLR-PCO05 (Ref: HLR-017):** The function shall search for the substring "line:" within the `ctags_output` string using `strstr()`. The result of this search shall be stored in a local `char *input` pointer.
-*   **LLR-PCO06 (Ref: HLR-017, HLR-024):** If the `input` pointer (from LLR-PCO05) is `NULL` (meaning "line:" was not found), the function shall print the error message "Error: Invalid ctags output format.\n" to `stderr` using `fprintf()`.
-*   **LLR-PCO07 (Ref: HLR-017):** If the `input` pointer (from LLR-PCO05) is `NULL`, the function shall immediately return `false`.
-*   **LLR-PCO08 (Ref: HLR-017):** If "line:" was found, the function shall attempt to parse an integer immediately following "line:" from the `input` string using `sscanf(input, "line:%d", start_line)`.
-*   **LLR-PCO09 (Ref: HLR-017):** The function shall then search for the substring "end:" within the `input` string (which now points to or after "line:") using `strstr()`. The result of this search shall update the `input` pointer.
-*   **LLR-PCO10 (Ref: HLR-017, HLR-024):** If the `input` pointer (from LLR-PCO09) is `NULL` (meaning "end:" was not found after "line:"), the function shall print the error message "Error: Invalid ctags output format.\n" to `stderr` using `fprintf()`.
-*   **LLR-PCO11 (Ref: HLR-017):** If the `input` pointer (from LLR-PCO09) is `NULL`, the function shall immediately return `false`.
-*   **LLR-PCO12 (Ref: HLR-017):** If "end:" was found, the function shall attempt to parse an integer immediately following "end:" from the `input` string using `sscanf(input, "end:%d", end_line)`.
-*   **LLR-PCO13 (Ref: HLR-017):** The function shall validate the parsed line numbers. It will check if `*start_line` is less than or equal to `0`, OR if `*end_line` is less than or equal to `0`, OR if `*start_line` is greater than or equal to `*end_line`.
-*   **LLR-PCO14 (Ref: HLR-017, HLR-024):** If any of the conditions in LLR-PCO13 are true (indicating invalid line numbers), the function shall print a formatted error message to `stderr` using `fprintf()`. The message shall be: "Error: Invalid line range in ctags output (start: %d, end: %d).\n", where the `%d` placeholders are filled with the values of `*start_line` and `*end_line` respectively.
-*   **LLR-PCO15 (Ref: HLR-017):** If any of the conditions in LLR-PCO13 are true, the function shall immediately return `false`.
-*   **LLR-PCO16 (Ref: HLR-017):** If all preceding checks and parsing steps are successful and the line numbers are valid, the function shall return `true`.
+*   <a id="LLR-PCL-09"></a>**LLR-PCL-09** — `parse_command_line` shall not return any value; on
+    success it shall return normally with `app_config` populated.
+    *Trace:* HLR-002 (Argument Parsing and Validation).
 
-## Low-Level Requirements (LLRs) for the print_source_function() function in /home/john/Projects/Valgrind_Parser/vgp.c
+## 5. `strip_valgrind_pid_prefix` ([src/vgp.c](../src/vgp.c))
 
-These LLRs detail the specific logic for locating and printing the source code of an entire function, highlighting a specific line within it, using `ctags` for function boundary detection.
+*   <a id="LLR-SVPP-01"></a>**LLR-SVPP-01** — Signature: `char *strip_valgrind_pid_prefix(char *line)`.
+    *Trace:* HLR-014 (PID-Prefix Stripping).
 
-*   **LLR-PSF01 (Ref: HLR-018):** The `print_source_function()` function shall be defined with the signature `void print_source_function(const char *source_file, const char *function_name, int line_number)`.
-*   **LLR-PSF02 (Ref: HLR-016, HLR-017, HLR-024):** The function shall first validate its input arguments. It shall check if the `source_file` pointer is `NULL`, if the `function_name` pointer is `NULL`, or if `line_number` is less than or equal to `0`.
-*   **LLR-PSF03 (Ref: HLR-016, HLR-017, HLR-024):** If any of the conditions in LLR-PSF02 are met (i.e., an invalid argument is detected), the function shall print the error message "Error: Invalid arguments to print_source_function.\n" to `stderr` using `fprintf()`.
-*   **LLR-PSF04 (Ref: HLR-016, HLR-017):** If any of the conditions in LLR-PSF02 are met, the function shall immediately return (void function).
-*   **LLR-PSF05 (Ref: HLR-017):** The function shall declare a local character array `command` of size `MAX_LINE_LENGTH` (defined in `/home/john/Projects/Valgrind_Parser/vgp.h`).
-*   **LLR-PSF06 (Ref: HLR-017):** The function shall declare a local character array `ctags_output` of size `MAX_LINE_LENGTH`.
-*   **LLR-PSF07 (Ref: HLR-017):** The function shall declare local integer variables `start_line` and `end_line`, initializing them to `0`.
-*   **LLR-PSF08 (Ref: HLR-017):** The function shall construct a `ctags` command string using `snprintf()` and store it in the `command` buffer. The format of the command shall be: `"ctags -o - --c-kinds=f --fields=+ne %s | grep '^%s'"`, where the first `%s` is replaced by `source_file` and the second `%s` by `function_name`.
-*   **LLR-PSF09 (Ref: HLR-017):** The function shall call `execute_command()` with the `command` string, the `ctags_output` buffer, and `sizeof(ctags_output)` as arguments.
-*   **LLR-PSF10 (Ref: HLR-017, HLR-024):** If `execute_command()` returns `false` (indicating failure to execute or capture output):
-    *   A formatted error message "Error: Could not find function '%s' in file '%s'.\n" shall be printed to `stderr` using `fprintf()`, where the placeholders are filled with `function_name` and `source_file` respectively.
-    *   The function shall then immediately return.
-*   **LLR-PSF11 (Ref: HLR-017):** The function shall call `parse_ctags_output()` with the `ctags_output` string, and pointers to `start_line` and `end_line` as arguments.
-*   **LLR-PSF12 (Ref: HLR-017, HLR-024):** If `parse_ctags_output()` returns `false` (indicating failure to parse the ctags output):
-    *   A formatted error message "Error: Failed to parse ctags output for function '%s'.\n" shall be printed to `stderr` using `fprintf()`, where the placeholder is filled with `function_name`.
-    *   The function shall then immediately return.
-*   **LLR-PSF13 (Ref: HLR-017):** The function shall increment the `end_line` variable by `1` (to make the loop condition for printing inclusive of the ctags end line).
-*   **LLR-PSF14 (Ref: HLR-017, HLR-024):** The function shall validate the adjusted line range. It will check if `start_line` is less than or equal to `0`, OR if `end_line` (after increment) is less than or equal to `0`, OR if `start_line` is greater than `end_line`.
-*   **LLR-PSF15 (Ref: HLR-017, HLR-024):** If any of the conditions in LLR-PSF14 are true (indicating an invalid line range):
-    *   A formatted error message "Error: Invalid line range for function '%s' (start: %d, end: %d).\n" shall be printed to `stderr` using `fprintf()`, where the placeholders are filled with `function_name`, `start_line`, and the (incremented) `end_line` respectively.
-    *   The function shall then immediately return.
-*   **LLR-PSF16 (Ref: HLR-016):** The function shall attempt to open the file specified by `source_file` in read-only mode (`"r"`) using `fopen()`. The result shall be stored in a local `FILE *file` variable.
-*   **LLR-PSF17 (Ref: HLR-016, HLR-024):** If `fopen()` returns `NULL` (indicating an error opening the source file):
-    *   The function shall call `perror("fopen")` to print a system error message to `stderr`.
-    *   The function shall then immediately return.
-*   **LLR-PSF18 (Ref: HLR-018):** The function shall declare a local character array `line` of size `MAX_LINE_LENGTH`.
-*   **LLR-PSF19 (Ref: HLR-018):** The function shall declare a local integer variable `current_line` and initialize it to `1`.
-*   **LLR-PSF20 (Ref: HLR-018):** The function shall enter a `while` loop that continues as long as `current_line` (incremented before comparison) is less than `start_line` AND `fgets()` successfully reads a line from `file` into the `line` buffer. This loop advances the file pointer to the start of the function.
-*   **LLR-PSF21 (Ref: HLR-018):** The function shall enter a second `while` loop that continues as long as `current_line` (incremented before comparison) is less than or equal to `end_line` AND `fgets()` successfully reads a line from `file` into the `line` buffer.
-*   **LLR-PSF22 (Ref: HLR-018):** Inside the second `while` loop (LLR-PSF21), the function shall print to `stdout` using `printf()`.
-    *   The first character printed shall be `'>'` if `current_line` is equal to the input `line_number` (the line to highlight).
-    *   Otherwise, the first character printed shall be a space `' '`.
-    *   This character shall be followed by the `current_line` number, formatted to take 4 spaces (e.g., using `"%4d "`).
-    *   Finally, the content of the `line` buffer (the source code line itself) shall be printed.
-*   **LLR-PSF23 (Ref: HLR-016):** After the loops complete (or if `fopen` failed earlier and the function returned), if `file` is not `NULL`, the function shall call `fclose(file)` to close the source file stream.
+*   <a id="LLR-SVPP-02"></a>**LLR-SVPP-02** — If `line` is `NULL`, the function shall return
+    `NULL`.
+    *Trace:* HLR-039 (Defensive Argument Validation).
 
-## Low-Level Requirements (LLRs) for the initialize_parse_state() function in /home/john/Projects/Valgrind_Parser/vgp.c
+*   <a id="LLR-SVPP-03"></a>**LLR-SVPP-03** — The function shall locate the first `"=="`
+    substring with `strstr`. If absent, it shall return `line` unchanged.
+    *Trace:* HLR-014 (PID-Prefix Stripping), HLR-040 (Non-Fatal Recovery from Malformed Input).
 
-These LLRs detail the specific operations for initializing a `ParseState` structure to its default values at the beginning of log file processing.
+*   <a id="LLR-SVPP-04"></a>**LLR-SVPP-04** — After advancing past the leading `"=="`, the
+    function shall skip whitespace via `isspace`, require at least one
+    digit (returning `line` unchanged otherwise), and skip the run of
+    digits.
+    *Trace:* HLR-014 (PID-Prefix Stripping), HLR-040 (Non-Fatal Recovery from Malformed Input).
 
-*   **LLR-IPS01 (Ref: HLR-023):** The `initialize_parse_state()` function shall be defined with the signature `void initialize_parse_state(ParseState *state)`.
-*   **LLR-IPS02 (Ref: HLR-023):** The function shall first check if the input `state` pointer is `NULL`.
-*   **LLR-IPS03 (Ref: HLR-023):** If the `state` pointer is `NULL`, the function shall immediately return without performing any further actions.
-*   **LLR-IPS04 (Ref: HLR-023):** If the `state` pointer is not `NULL`, the function shall set the `state->in_error_block` member to `false`.
-*   **LLR-IPS05 (Ref: HLR-023):** The function shall set the `state->print_function` member to `false`.
-*   **LLR-IPS06 (Ref: HLR-023):** The function shall set the `state->stack_lines_shown` member to `0`.
-*   **LLR-IPS07 (Ref: HLR-023):** The function shall set the `state->user_code_found_for_error` member to `false`.
-*   **LLR-IPS08 (Ref: HLR-023):** The function shall set the first character of the `state->current_error_type` character array to the null terminator (`\0`), effectively initializing it as an empty string.
-*   **LLR-IPS09 (Ref: HLR-023):** The function shall set the first character of the `state->error_filename` character array to the null terminator (`\0`), effectively initializing it as an empty string.
-*   **LLR-IPS10 (Ref: HLR-023):** The function shall set the first character of the `state->error_function_name` character array to the null terminator (`\0`), effectively initializing it as an empty string.
-*   **LLR-IPS11 (Ref: HLR-023):** The function shall set the `state->error_line_number` member to `-1`.
-*   **LLR-IPS12 (Ref: HLR-023, HLR-021):** The function shall set the `state->error_count` member to `0`.
+*   <a id="LLR-SVPP-05"></a>**LLR-SVPP-05** — After the digits, the function shall again skip
+    whitespace and shall require the literal sequence `"== "` (matched
+    via `strncmp`). If absent, it shall return `line` unchanged.
+    *Trace:* HLR-014 (PID-Prefix Stripping), HLR-040 (Non-Fatal Recovery from Malformed Input).
 
-## Low-Level Requirements (LLRs) for the check_start_new_error() function in /home/john/Projects/Valgrind_Parser/vgp.c
+*   <a id="LLR-SVPP-06"></a>**LLR-SVPP-06** — On a successful match the function shall advance
+    past the trailing `"== "` and shall return a pointer into the
+    original buffer at the start of the message body.
+    *Trace:* HLR-014 (PID-Prefix Stripping).
 
-These LLRs detail the specific logic for determining if a given log line signifies the beginning of a new Valgrind error report block and for initializing the parser state accordingly.
+## 6. `is_user_code_stack_trace` ([src/vgp.c](../src/vgp.c))
 
-*   **LLR-CSNE01 (Ref: HLR-011):** The `check_start_new_error()` function shall be defined with the signature `bool check_start_new_error(const char *line_content, ParseState *state)`.
-*   **LLR-CSNE02 (Ref: HLR-011):** The function shall first check if either the input `line_content` pointer is `NULL` OR the input `state` pointer is `NULL`.
-*   **LLR-CSNE03 (Ref: HLR-011):** If the condition in LLR-CSNE02 is true (i.e., an invalid argument is detected), the function shall immediately return `false`.
-*   **LLR-CSNE04 (Ref: HLR-011, HLR-023):** The function shall check if the `state->in_error_block` member is `false`. If `state->in_error_block` is `true`, the function shall immediately return `false` (as a new error cannot start if already within an error block).
-*   **LLR-CSNE05 (Ref: HLR-011):** If `state->in_error_block` is `false`, the function shall iterate through the `ERROR_KEYWORDS` global array (defined in `/home/john/Projects/Valgrind_Parser/vgp.c`). The iteration shall continue as long as the current array element is not `NULL`.
-*   **LLR-CSNE06 (Ref: HLR-011):** For each keyword string in the `ERROR_KEYWORDS` array, the function shall use `strstr(line_content, ERROR_KEYWORDS[i])` to check if the keyword is present as a substring within the input `line_content`.
-*   **LLR-CSNE07 (Ref: HLR-011, HLR-012):** If a keyword is found in `line_content` (i.e., `strstr()` returns a non-`NULL` pointer):
-    *   The function shall call `print_error_header(line_content, state)` to print the standard error block header using the current `line_content`.
-*   **LLR-CSNE08 (Ref: HLR-011, HLR-023):** If a keyword is found, the function shall copy the matched `ERROR_KEYWORDS[i]` string into the `state->current_error_type` character array using `strncpy()`. The maximum number of characters to copy shall be `sizeof(state->current_error_type) - 1` to ensure space for a null terminator.
-*   **LLR-CSNE09 (Ref: HLR-011, HLR-023):** After copying the keyword with `strncpy()`, the function shall ensure null termination by setting `state->current_error_type[sizeof(state->current_error_type) - 1]` to `'\0'`.
-*   **LLR-CSNE10 (Ref: HLR-011, HLR-023):** If a keyword is found, the function shall set the `state->in_error_block` member to `true`.
-*   **LLR-CSNE11 (Ref: HLR-011, HLR-023):** If a keyword is found, the function shall reset `state->stack_lines_shown` to `0`.
-*   **LLR-CSNE12 (Ref: HLR-011, HLR-023):** If a keyword is found, the function shall reset `state->user_code_found_for_error` to `false`.
-*   **LLR-CSNE13 (Ref: HLR-011, HLR-023):** If a keyword is found, the function shall reset `state->print_function` to `false`.
-*   **LLR-CSNE14 (Ref: HLR-011):** If a keyword is found, the function shall immediately return `true` (indicating a new error block has started).
-*   **LLR-CSNE15 (Ref: HLR-011):** If the loop through all `ERROR_KEYWORDS` completes without finding any matching keyword in `line_content`, the function shall return `false`.
+*   <a id="LLR-IUCST-01"></a>**LLR-IUCST-01** — Signature: `bool is_user_code_stack_trace(const char *line)`.
+    *Trace:* HLR-022 (User-Code Classification).
 
-## Low-Level Requirements (LLRs) for the process_stack_trace_line() function in /home/john/Projects/Valgrind_Parser/vgp.c
+*   <a id="LLR-IUCST-02"></a>**LLR-IUCST-02** — If `line` is `NULL`, the function shall return
+    `false`.
+    *Trace:* HLR-039 (Defensive Argument Validation).
 
-These LLRs detail the specific logic for processing a single line that has been identified as part of a Valgrind stack trace, determining whether to display it, and extracting information if it's user code.
+*   <a id="LLR-IUCST-03"></a>**LLR-IUCST-03** — The function shall return `false` if `line` does
+    not begin with either `"   at "` or `"   by "` (`strncmp` of the
+    leading 6 characters).
+    *Trace:* HLR-020 (Stack Frame Recognition), HLR-022 (User-Code Classification).
 
-*   **LLR-PSTL01 (Ref: HLR-013, HLR-023):** The `process_stack_trace_line()` function shall be defined with the signature `void process_stack_trace_line(const char *line_content, ParseState *state)`.
-*   **LLR-PSTL02 (Ref: HLR-013, HLR-023):** The function shall first check if either the input `line_content` pointer is `NULL` OR the input `state` pointer is `NULL`.
-*   **LLR-PSTL03 (Ref: HLR-013, HLR-023):** If the condition in LLR-PSTL02 is true (i.e., an invalid argument is detected), the function shall immediately return without performing any further actions.
-*   **LLR-PSTL04 (Ref: HLR-013, HLR-014, HLR-015, HLR-023):** The function shall evaluate a primary condition: if `state->stack_lines_shown` is less than `STACK_TRACE_CONTEXT_LINES` (defined in `/home/john/Projects/Valgrind_Parser/vgp.h`) OR if `is_user_code_stack_trace(line_content)` returns `true`.
-*   **LLR-PSTL05 (Ref: HLR-013, HLR-023, HLR-025):** If the condition in LLR-PSTL04 is true:
-    *   A local character array `stack_entry` of size `MAX_LINE_LENGTH` (defined in `/home/john/Projects/Valgrind_Parser/vgp.h`) shall be declared.
-    *   The function shall check if `app_config.print_stack` is `true` OR `app_config.verbose` is `true`.
-        *   If this sub-condition is true, the function shall call `get_function_name(line_content, stack_entry)` to format the stack trace line.
-        *   The function shall then print the content of `stack_entry` to `stdout`, prefixed with "  - " (e.g., using `printf("  - %s", stack_entry)`).
-        *   The `state->stack_lines_shown` member shall be incremented by one.
-*   **LLR-PSTL06 (Ref: HLR-014, HLR-016, HLR-023):** If the condition in LLR-PSTL04 is true, the function shall then evaluate a secondary condition: if `state->user_code_found_for_error` is `false` AND `is_user_code_stack_trace(line_content)` returns `true`.
-    *   If this secondary condition is true:
-        *   The `state->user_code_found_for_error` member shall be set to `true`.
-        *   The function shall call `extract_file_and_line(line_content, state->error_filename, state->error_function_name, &state->error_line_number)`.
-        *   The boolean result of the `extract_file_and_line()` call shall be assigned to the `state->print_function` member.
-*   **LLR-PSTL07 (Ref: HLR-015, HLR-023, HLR-025):** If the condition in LLR-PSTL04 is `false`, the function shall then evaluate an alternative condition: if `state->user_code_found_for_error` is `false` AND `state->stack_lines_shown` is equal to `STACK_TRACE_CONTEXT_LINES`.
-    *   If this alternative condition is true:
-        *   The function shall check if `app_config.print_stack` is `true` OR `app_config.verbose` is `true`.
-            *   If this sub-condition is true, the function shall print the string "  - ...\n" to `stdout`.
-            *   The `state->stack_lines_shown` member shall be incremented by one (to prevent printing the ellipsis multiple times for subsequent non-user-code lines).
+*   <a id="LLR-IUCST-04"></a>**LLR-IUCST-04** — The function shall iterate `USER_CODE_EXTENSIONS`
+    until it finds an entry that appears as a substring of `line` (via
+    `strstr`). If no entry matches, it shall return `false`.
+    *Trace:* HLR-022 (User-Code Classification), HLR-029 (Multi-Language Source Support).
 
-## Low-Level Requirements (LLRs) for the finalize_error_block() function in /home/john/Projects/Valgrind_Parser/vgp.c
+*   <a id="LLR-IUCST-05"></a>**LLR-IUCST-05** — The function shall iterate `IGNORE_PATHS` and
+    return `false` if any entry appears as a substring of `line`.
+    *Trace:* HLR-022 (User-Code Classification).
 
-These LLRs detail the specific operations for concluding the processing of a Valgrind error block, which includes potentially printing source code and resetting relevant parser state flags.
+*   <a id="LLR-IUCST-06"></a>**LLR-IUCST-06** — Otherwise the function shall return `true`.
+    *Trace:* HLR-022 (User-Code Classification).
 
-*   **LLR-FEB01 (Ref: HLR-023):** The `finalize_error_block()` function shall be defined with the signature `void finalize_error_block(ParseState *state)`.
-*   **LLR-FEB02 (Ref: HLR-023):** The function shall first check if the input `state` pointer is `NULL`.
-*   **LLR-FEB03 (Ref: HLR-023):** If the `state` pointer is `NULL`, the function shall immediately return without performing any further actions.
-*   **LLR-FEB04 (Ref: HLR-015, HLR-023, HLR-024):** If the `state` pointer is not `NULL`, the function shall check if `state->user_code_found_for_error` is `false` AND `state->stack_lines_shown` is greater than `0`.
-    *   If this condition is true, the function shall print a formatted message to `stdout` using `printf()`. The message shall be: `"  (-> Check stack trace above for user code related to '%s')\n"`, where `%s` is replaced by the content of `state->current_error_type`.
-*   **LLR-FEB05 (Ref: HLR-016, HLR-018, HLR-023):** The function shall then check if `state->print_function` is `true`.
-    *   If `state->print_function` is `true`:
-        *   A header message shall be printed to `stdout` using `printf()`. The message shall be: `"Source (%s:%d)\n"`, where the first `%s` is replaced by `state->error_filename` and `%d` is replaced by `state->error_line_number`.
-*   **LLR-FEB06 (Ref: HLR-018, HLR-025):** If `state->print_function` is `true` (continuing from LLR-FEB05), the function shall then check if `app_config.print_source` is `true` OR `app_config.verbose` is `true`.
-    *   If this sub-condition is true:
-        *   The function shall call `print_source_function(state->error_filename, state->error_function_name, state->error_line_number)`.
-        *   A newline character (`\n`) shall be printed to `stdout` using `printf()`.
-*   **LLR-FEB07 (Ref: HLR-023):** After the conditional printing logic, the function shall set the `state->in_error_block` member to `false`.
-*   **LLR-FEB08 (Ref: HLR-023):** The function shall set the `state->print_function` member to `false`.
+## 7. `get_function_name` ([src/vgp.c](../src/vgp.c))
 
-## Low-Level Requirements (LLRs) for the process_in_error_block() function in /home/john/Projects/Valgrind_Parser/vgp.c
+*   <a id="LLR-GFN-01"></a>**LLR-GFN-01** — Signature: `char *get_function_name(const char *line, char *newline)`.
+    *Trace:* HLR-021 (Stack Frame Decoding).
 
-These LLRs detail the specific logic for handling a line of text when the parser is currently within an identified Valgrind error block.
+*   <a id="LLR-GFN-02"></a>**LLR-GFN-02** — The function shall declare local `function` and
+    `filename` buffers of size `MAX_LINE_LENGTH`, both initialised to
+    `"?"`, and a `line_number` integer initialised to `0`.
+    *Trace:* HLR-021 (Stack Frame Decoding), HLR-037 (Bounded Line Buffer).
 
-*   **LLR-PIEB01 (Ref: HLR-023):** The `process_in_error_block()` function shall be defined with the signature `void process_in_error_block(const char *line_content, ParseState *state)`.
-*   **LLR-PIEB02 (Ref: HLR-023):** The function shall first check if either the input `line_content` pointer is `NULL` OR the input `state` pointer is `NULL`.
-*   **LLR-PIEB03 (Ref: HLR-023):** If the condition in LLR-PIEB02 is true (i.e., an invalid argument is detected), the function shall immediately return without performing any further actions.
-*   **LLR-PIEB04 (Ref: HLR-011, HLR-013):** The function shall check if the `line_content` string starts with the prefix "   at " (6 characters) using `strncmp()`.
-*   **LLR-PIEB05 (Ref: HLR-011, HLR-013):** If the condition in LLR-PIEB04 is false, the function shall then check if the `line_content` string starts with the prefix "   by " (6 characters) using `strncmp()`.
-*   **LLR-PIEB06 (Ref: HLR-013, HLR-023):** If either the condition in LLR-PIEB04 is true OR the condition in LLR-PIEB05 is true (indicating the line is part of a stack trace):
-    *   The function shall call `process_stack_trace_line(line_content, state)` to handle the specific processing of this stack trace line.
-*   **LLR-PIEB07 (Ref: HLR-011, HLR-016, HLR-018, HLR-023):** If both the condition in LLR-PIEB04 is false AND the condition in LLR-PIEB05 is false (indicating the line is not part of a stack trace and thus signifies the end of the current error's stack trace information):
-    *   The function shall call `finalize_error_block(state)` to conclude the processing of the current error block (which may include printing source code and resetting state flags).
+*   <a id="LLR-GFN-03"></a>**LLR-GFN-03** — The function shall attempt to extract the function
+    name, file path, and line number from `line` using
+    `sscanf(line, "%*s %*s %[^ ] (%[^:]:%d)", function, filename, &line_number)`.
+    *Trace:* HLR-021 (Stack Frame Decoding).
 
-## Low-Level Requirements (LLRs) for the process_summary_lines() function in /home/john/Projects/Valgrind_Parser/vgp.c
+*   <a id="LLR-GFN-04"></a>**LLR-GFN-04** — Any trailing parenthesis suffix in `function`
+    (a `'('` not at the final position) shall be truncated to `'\0'` so
+    that overload/parameter notation is dropped.
+    *Trace:* HLR-021 (Stack Frame Decoding).
 
-These LLRs detail the specific logic for identifying and processing lines that belong to Valgrind's summary sections, such as leak summaries and the final error summary.
+*   <a id="LLR-GFN-05"></a>**LLR-GFN-05** — If `line_number` is non-zero, the function shall
+    write `"%s(%s:%d)\n"` (with `function`, `basename(filename)`, and
+    `line_number`) to `newline` via `snprintf` bounded by the original
+    `line` length.
+    *Trace:* HLR-021 (Stack Frame Decoding), HLR-028 (Editor-Jumpable References).
 
-*   **LLR-PSL01 (Ref: HLR-019, HLR-020, HLR-021):** The `process_summary_lines()` function shall be defined with the signature `void process_summary_lines(const char *line_content, ParseState *state)`.
-*   **LLR-PSL02 (Ref: N/A - Defensive Programming):** The function shall first check if the input `line_content` pointer is `NULL`. If it is `NULL`, the function shall immediately return without performing any further actions. (Note: The `state` pointer is also an argument, but it's only passed through to `print_final_error_summary`; a `NULL` check for `state` here would also be good practice, though the current code doesn't explicitly do it before its potential use in the called function).
-*   **LLR-PSL03 (Ref: HLR-019):** The function shall use `strstr(line_content, "LEAK SUMMARY:")` to check if the `line_content` contains the "LEAK SUMMARY:" keyword.
-*   **LLR-PSL04 (Ref: HLR-019, HLR-025):** If the condition in LLR-PSL03 is true:
-    *   The function shall check if the `app_config.print_leak_summary` global boolean flag is `true` OR the `app_config.verbose` global boolean flag is `true`.
-    *   If this sub-condition is true, the function shall print the string "\n--- LEAK SUMMARY ---\n" to `stdout` using `printf()`.
-*   **LLR-PSL05 (Ref: HLR-020):** If the condition in LLR-PSL03 is false, the function shall then use `strstr(line_content, "definitely lost:")` to check if the `line_content` contains the "definitely lost:" keyword.
-*   **LLR-PSL06 (Ref: HLR-020, HLR-025):** If the condition in LLR-PSL05 is true:
-    *   The function shall check if the `app_config.print_leak_summary` global boolean flag is `true` OR the `app_config.verbose` global boolean flag is `true`.
-    *   If this sub-condition is true, the function shall call `print_leak_summary_line(line_content, "Definitely Lost")`.
-*   **LLR-PSL07 (Ref: HLR-020):** If the conditions in LLR-PSL03 and LLR-PSL05 are false, the function shall then use `strstr(line_content, "indirectly lost:")` to check if the `line_content` contains the "indirectly lost:" keyword.
-*   **LLR-PSL08 (Ref: HLR-020, HLR-025):** If the condition in LLR-PSL07 is true:
-    *   The function shall check if the `app_config.print_leak_summary` global boolean flag is `true` OR the `app_config.verbose` global boolean flag is `true`.
-    *   If this sub-condition is true, the function shall call `print_leak_summary_line(line_content, "Indirectly Lost")`.
-*   **LLR-PSL09 (Ref: HLR-020):** If the conditions in LLR-PSL03, LLR-PSL05, and LLR-PSL07 are false, the function shall then use `strstr(line_content, "possibly lost:")` to check if the `line_content` contains the "possibly lost:" keyword.
-*   **LLR-PSL10 (Ref: HLR-020, HLR-025):** If the condition in LLR-PSL09 is true:
-    *   The function shall check if the `app_config.print_leak_summary` global boolean flag is `true` OR the `app_config.verbose` global boolean flag is `true`.
-    *   If this sub-condition is true, the function shall call `print_leak_summary_line(line_content, "Possibly Lost")`.
-*   **LLR-PSL11 (Ref: HLR-020):** If the conditions in LLR-PSL03, LLR-PSL05, LLR-PSL07, and LLR-PSL09 are false, the function shall then use `strstr(line_content, "still reachable:")` to check if the `line_content` contains the "still reachable:" keyword.
-*   **LLR-PSL12 (Ref: HLR-020, HLR-025):** If the condition in LLR-PSL11 is true:
-    *   The function shall check if the `app_config.print_leak_summary` global boolean flag is `true` OR the `app_config.verbose` global boolean flag is `true`.
-    *   If this sub-condition is true, the function shall call `print_leak_summary_line(line_content, "Still Reachable")`.
-*   **LLR-PSL13 (Ref: HLR-021):** If the conditions in LLR-PSL03, LLR-PSL05, LLR-PSL07, LLR-PSL09, and LLR-PSL11 are false, the function shall then use `strstr(line_content, "ERROR SUMMARY:")` to check if the `line_content` contains the "ERROR SUMMARY:" keyword.
-*   **LLR-PSL14 (Ref: HLR-021):** If the condition in LLR-PSL13 is true, the function shall call `print_final_error_summary(line_content, state)`.
+*   <a id="LLR-GFN-06"></a>**LLR-GFN-06** — If `line_number` is zero, the function shall write
+    `"?(?:0)\n"` to `newline`.
+    *Trace:* HLR-021 (Stack Frame Decoding), HLR-040 (Non-Fatal Recovery from Malformed Input).
 
-## Low-Level Requirements (LLRs) for the process_log_file() function in /home/john/Projects/Valgrind_Parser/vgp.c
+*   <a id="LLR-GFN-07"></a>**LLR-GFN-07** — The function shall return the `newline` pointer.
+    *Trace:* HLR-021 (Stack Frame Decoding).
 
-These LLRs detail the specific operations for reading and processing a Valgrind log file line by line, orchestrating the parsing logic based on the current state and line content.
+## 8. `extract_file_and_line` ([src/vgp.c](../src/vgp.c))
 
-*   **LLR-PLF01 (Ref: HLR-005):** The `process_log_file()` function shall be defined with the signature `void process_log_file(FILE *file)`.
-*   **LLR-PLF02 (Ref: HLR-005):** The function shall first check if the input `file` pointer is `NULL`.
-*   **LLR-PLF03 (Ref: HLR-005):** If the `file` pointer is `NULL`, the function shall immediately return without performing any further actions.
-*   **LLR-PLF04 (Ref: HLR-023):** The function shall declare a local character array `line` of size `MAX_LINE_LENGTH` (defined in `/home/john/Projects/Valgrind_Parser/vgp.h`).
-*   **LLR-PLF05 (Ref: HLR-023):** The function shall declare a local `ParseState` variable named `state`.
-*   **LLR-PLF06 (Ref: HLR-023):** The function shall call `initialize_parse_state(&state)` to set the `state` variable to its default initial values.
-*   **LLR-PLF07 (Ref: HLR-005, HLR-010, HLR-011, HLR-013, HLR-019, HLR-020, HLR-021):** The function shall enter a `while` loop that continues as long as `fgets(line, sizeof(line), file)` successfully reads a line from the input `file` stream into the `line` buffer.
-*   **LLR-PLF08 (Ref: HLR-010):** Inside the `while` loop, the function shall call `strip_valgrind_pid_prefix(line)` and assign the returned pointer to a local `char *line_content` variable.
-*   **LLR-PLF09 (Ref: N/A - Internal Logic):** Inside the `while` loop, the function shall check if `state.in_error_block` is `false` AND if the `line_content` consists only of whitespace characters (space, tab, newline, carriage return) using `strspn(line_content, " \t\n\r") == strlen(line_content)`.
-    *   If this condition is true, the loop shall `continue` to the next iteration, effectively skipping empty or whitespace-only lines when not inside an error block.
-*   **LLR-PLF10 (Ref: HLR-011, HLR-013, HLR-016, HLR-018, HLR-023):** Inside the `while` loop, the function shall check if `state.in_error_block` is `true`.
-    *   If `state.in_error_block` is `true`, the function shall call `process_in_error_block(line_content, &state)`.
-*   **LLR-PLF11 (Ref: HLR-011, HLR-012, HLR-023):** Inside the `while` loop, after the check in LLR-PLF10 (or if `state.in_error_block` was initially false), the function shall check if `state.in_error_block` is `false` (it might have been set to false by `process_in_error_block` calling `finalize_error_block`).
-    *   If `state.in_error_block` is `false`, the function shall call `check_start_new_error(line_content, &state)` and store its boolean result (e.g., in a local `bool new_error_started` variable).
-    *   If `check_start_new_error()` returned `true`, the loop shall `continue` to the next iteration.
-*   **LLR-PLF12 (Ref: HLR-019, HLR-020, HLR-021, HLR-023):** Inside the `while` loop, after the checks in LLR-PLF10 and LLR-PLF11 (or if `state.in_error_block` was false and `check_start_new_error` returned false), the function shall check if `state.in_error_block` is `false`.
-    *   If `state.in_error_block` is `false`, the function shall call `process_summary_lines(line_content, &state)`.
-*   **LLR-PLF13 (Ref: HLR-011, HLR-016, HLR-018, HLR-023):** After the `while` loop terminates (i.e., `fgets()` returns `NULL`, indicating end-of-file or an error), the function shall check if `state.in_error_block` is `true`.
-    *   If `state.in_error_block` is `true`, the function shall call `finalize_error_block(&state)`.
-    *   If `state.in_error_block` was `true` (and `finalize_error_block` was called), the function shall print "----------------------------------------\n\n" to `stdout` using `printf()`.
+*   <a id="LLR-EFAL-01"></a>**LLR-EFAL-01** — Signature:
+    `bool extract_file_and_line(const char *line, char *filename, char *function_name, int *line_number)`.
+    *Trace:* HLR-021 (Stack Frame Decoding), HLR-025 (First-User-Frame Capture).
+
+*   <a id="LLR-EFAL-02"></a>**LLR-EFAL-02** — If any of `line`, `filename`, `function_name`, or
+    `line_number` is `NULL`, the function shall return `false`.
+    *Trace:* HLR-039 (Defensive Argument Validation).
+
+*   <a id="LLR-EFAL-03"></a>**LLR-EFAL-03** — The function shall first attempt to parse `line`
+    via `sscanf(line, "%*s %*s %[^ ] (%[^:]:%d)", temp_function, temp_filename, line_number)`
+    against local `MAX_LINE_LENGTH` buffers.
+    *Trace:* HLR-021 (Stack Frame Decoding), HLR-025 (First-User-Frame Capture).
+
+*   <a id="LLR-EFAL-04"></a>**LLR-EFAL-04** — On a 3-field match, the function shall copy the
+    first whitespace-delimited token of `temp_filename` to `filename`
+    and of `temp_function` to `function_name` (via the internal
+    `copy_first_token` helper), shall normalise the function name to
+    drop parameter lists, dotted suffixes, and namespace prefixes (via
+    the internal `normalize_function_name` helper), and shall return
+    `true`.
+    *Trace:* HLR-021 (Stack Frame Decoding), HLR-025 (First-User-Frame Capture).
+
+*   <a id="LLR-EFAL-05"></a>**LLR-EFAL-05** — If the 3-field parse fails, the function shall try
+    `sscanf(line, "%*[^:]: %[^:]:%d", temp_filename, line_number)`. On a
+    2-field match it shall copy `temp_filename` into `filename`, set
+    `function_name` to the empty string, and return `true`.
+    *Trace:* HLR-021 (Stack Frame Decoding), HLR-040 (Non-Fatal Recovery from Malformed Input).
+
+*   <a id="LLR-EFAL-06"></a>**LLR-EFAL-06** — If both prior parses fail, the function shall try
+    `sscanf(line, "%*[^:]: %[^(](in %[^)])", temp_function, temp_filename)`.
+    On a 2-field match it shall copy the first tokens into the output
+    buffers, normalise the function name, set `*line_number = 0`, and
+    return `true`.
+    *Trace:* HLR-021 (Stack Frame Decoding), HLR-040 (Non-Fatal Recovery from Malformed Input).
+
+*   <a id="LLR-EFAL-07"></a>**LLR-EFAL-07** — If none of the parses match, the function shall
+    return `false` without modifying the output buffers.
+    *Trace:* HLR-021 (Stack Frame Decoding), HLR-040 (Non-Fatal Recovery from Malformed Input).
+
+## 9. `print_error_header` ([src/vgp.c](../src/vgp.c))
+
+*   <a id="LLR-PEH-01"></a>**LLR-PEH-01** — Signature:
+    `void print_error_header(const char *error_type, ParseState *state)`.
+    *Trace:* HLR-018 (Error Header Rendering).
+
+*   <a id="LLR-PEH-02"></a>**LLR-PEH-02** — The function shall print
+    `"----------------------------------------\n"` to `stdout`.
+    *Trace:* HLR-018 (Error Header Rendering).
+
+*   <a id="LLR-PEH-03"></a>**LLR-PEH-03** — The function shall pre-increment `state->error_count`
+    and print `"[ERROR #%d] "` using the new value.
+    *Trace:* HLR-018 (Error Header Rendering), HLR-038 (Stateful Parsing Context).
+
+*   <a id="LLR-PEH-04"></a>**LLR-PEH-04** — If the last character of `error_type` is `'\n'`, the
+    function shall print `error_type` verbatim; otherwise it shall print
+    `error_type` followed by `"\n"`.
+    *Trace:* HLR-018 (Error Header Rendering), HLR-040 (Non-Fatal Recovery from Malformed Input).
+
+*   <a id="LLR-PEH-05"></a>**LLR-PEH-05** — If `app_config.print_stack` or `app_config.verbose`
+    is `true`, the function shall print `"Call Stack:\n"` to `stdout`.
+    *Trace:* HLR-012 (Verbose Mode), HLR-024 (Stack Trace Output Gated by Options).
+
+## 10. `print_leak_summary_line` ([src/vgp.c](../src/vgp.c))
+
+*   <a id="LLR-PLSL-01"></a>**LLR-PLSL-01** — Signature:
+    `void print_leak_summary_line(const char *line, const char *leak_type)`.
+    *Trace:* HLR-033 (Leak Detail Formatting).
+
+*   <a id="LLR-PLSL-02"></a>**LLR-PLSL-02** — The function shall attempt
+    `sscanf(line, "%*[^:]: %'d %*s %*s %'d", &bytes, &blocks)` (locale
+    aware) to extract the `bytes` and `blocks` counts.
+    *Trace:* HLR-005 (Locale Initialisation), HLR-033 (Leak Detail Formatting).
+
+*   <a id="LLR-PLSL-03"></a>**LLR-PLSL-03** — On a 2-field match the function shall print
+    `"* %s: %d bytes in %d blocks\n"` to `stdout` with `leak_type`,
+    `bytes`, and `blocks` substituted.
+    *Trace:* HLR-033 (Leak Detail Formatting).
+
+*   <a id="LLR-PLSL-04"></a>**LLR-PLSL-04** — If the parse fails, the function shall print the
+    raw `line`, appending a newline only when `line` does not already
+    end in `'\n'`.
+    *Trace:* HLR-035 (Robust Numeric Parsing), HLR-040 (Non-Fatal Recovery from Malformed Input).
+
+## 11. `print_final_error_summary` ([src/vgp.c](../src/vgp.c))
+
+*   <a id="LLR-PFES-01"></a>**LLR-PFES-01** — Signature:
+    `void print_final_error_summary(const char *line, ParseState *state)`.
+    *Trace:* HLR-034 (Final Error Summary Output).
+
+*   <a id="LLR-PFES-02"></a>**LLR-PFES-02** — The function shall attempt
+    `sscanf(line, "%*[^:]: %'d", &error_count)` (locale aware) to read
+    Valgrind's reported error total.
+    *Trace:* HLR-005 (Locale Initialisation), HLR-034 (Final Error Summary Output).
+
+*   <a id="LLR-PFES-03"></a>**LLR-PFES-03** — On a 1-field match the function shall print, in
+    order, `"\n--- FINAL COUNTS ---\n"`,
+    `"* Total Errors: %d\n"` (with `state->error_count`), and
+    `"* Possible Leaks: %d\n"` (with `error_count - state->error_count`).
+    *Trace:* HLR-034 (Final Error Summary Output), HLR-038 (Stateful Parsing Context).
+
+*   <a id="LLR-PFES-04"></a>**LLR-PFES-04** — If the parse fails, the function shall print the
+    raw `line`, appending a newline only when `line` does not already
+    end in `'\n'`.
+    *Trace:* HLR-035 (Robust Numeric Parsing), HLR-040 (Non-Fatal Recovery from Malformed Input).
+
+## 12. `execute_command` ([src/vgp.c](../src/vgp.c))
+
+*   <a id="LLR-EC-01"></a>**LLR-EC-01** — Signature:
+    `bool execute_command(const char *command, char *output, size_t output_size)`.
+    *Trace:* HLR-029 (Multi-Language Source Support), HLR-042 (POSIX Process Helpers), HLR-043 (External `ctags` Dependency Scope).
+
+*   <a id="LLR-EC-02"></a>**LLR-EC-02** — If `command` is `NULL`, `output` is `NULL`, or
+    `output_size` is `0`, the function shall return `false` without
+    side effects.
+    *Trace:* HLR-039 (Defensive Argument Validation).
+
+*   <a id="LLR-EC-03"></a>**LLR-EC-03** — The function shall invoke `popen(command, "r")` to
+    obtain a read pipe. If `popen` returns `NULL`, the function shall
+    call `perror("popen")` and return `false`.
+    *Trace:* HLR-030 (External-Tool Dependency Isolation), HLR-042 (POSIX Process Helpers).
+
+*   <a id="LLR-EC-04"></a>**LLR-EC-04** — The function shall call `fgets(output, output_size, fp)`
+    to capture the first line of the command's standard output.
+    *Trace:* HLR-029 (Multi-Language Source Support).
+
+*   <a id="LLR-EC-05"></a>**LLR-EC-05** — If `fgets` returns `NULL` and `ferror(fp)` is true,
+    the function shall call `perror("fgets")`, call `pclose(fp)`, and
+    return `false`.
+    *Trace:* HLR-030 (External-Tool Dependency Isolation), HLR-040 (Non-Fatal Recovery from Malformed Input).
+
+*   <a id="LLR-EC-06"></a>**LLR-EC-06** — On all other paths the function shall call
+    `pclose(fp)` and return `true`.
+    *Trace:* HLR-008 (Resource Management), HLR-029 (Multi-Language Source Support).
+
+## 13. `parse_ctags_output` ([src/vgp.c](../src/vgp.c))
+
+*   <a id="LLR-PCO-01"></a>**LLR-PCO-01** — Signature:
+    `bool parse_ctags_output(const char *language, char *ctags_output, int *start_line, int *end_line)`.
+    *Trace:* HLR-029 (Multi-Language Source Support).
+
+*   <a id="LLR-PCO-02"></a>**LLR-PCO-02** — If any of `language`, `ctags_output`, `start_line`,
+    or `end_line` is `NULL`, the function shall write
+    `"Error: Invalid arguments to parse_ctags_output.\n"` to `stderr`
+    and return `false`.
+    *Trace:* HLR-030 (External-Tool Dependency Isolation), HLR-039 (Defensive Argument Validation).
+
+*   <a id="LLR-PCO-03"></a>**LLR-PCO-03** — The function shall split the leading
+    tab-delimited fields of `ctags_output` into a function-name token
+    and a source-file token (failing with a diagnostic to `stderr` if
+    either tab is missing).
+    *Trace:* HLR-029 (Multi-Language Source Support), HLR-030 (External-Tool Dependency Isolation).
+
+*   <a id="LLR-PCO-04"></a>**LLR-PCO-04** — The function shall locate the substring `"line:"`
+    in the remaining ctags fields and shall parse the following integer
+    via `sscanf(input, "line:%d", start_line)`. A missing `"line:"`
+    field shall produce a diagnostic to `stderr` and return `false`.
+    *Trace:* HLR-029 (Multi-Language Source Support), HLR-030 (External-Tool Dependency Isolation).
+
+*   <a id="LLR-PCO-05"></a>**LLR-PCO-05** — The function shall open the source file via
+    `fopen(file_name, "r")` and shall read forward until reaching the
+    line numbered `*start_line`. If the file cannot be opened or the
+    start line cannot be reached, the function shall report the failure
+    on `stderr` and return `false`.
+    *Trace:* HLR-029 (Multi-Language Source Support), HLR-030 (External-Tool Dependency Isolation).
+
+*   <a id="LLR-PCO-06"></a>**LLR-PCO-06** — When the detected language is `"C"`, `"C++"`, or
+    `"Rust"`, the function shall scan forward from the start line,
+    counting `'{'` and `'}'` characters, and shall set `*end_line` to
+    the line on which the balanced brace count first returns to zero
+    after the first `'{'`.
+    *Trace:* HLR-029 (Multi-Language Source Support).
+
+*   <a id="LLR-PCO-07"></a>**LLR-PCO-07** — When the detected language is `"Fortran"`, the
+    function shall scan forward from the start line for a
+    case-insensitive match of `"END SUBROUTINE <function_name>"` and
+    shall set `*end_line` to the line on which the match is found.
+    *Trace:* HLR-029 (Multi-Language Source Support).
+
+*   <a id="LLR-PCO-08"></a>**LLR-PCO-08** — Languages other than C, C++, Rust, and Fortran
+    shall cause the function to close the source file, write
+    `"Note: Unsupported source language '%s'.\n"` to `stderr`, and
+    return `false`.
+    *Trace:* HLR-029 (Multi-Language Source Support), HLR-030 (External-Tool Dependency Isolation).
+
+*   <a id="LLR-PCO-09"></a>**LLR-PCO-09** — Before returning `true`, the function shall verify
+    that `*start_line > 0`, `*end_line > 0`, and
+    `*start_line < *end_line`. Otherwise it shall report the invalid
+    range on `stderr` and return `false`.
+    *Trace:* HLR-029 (Multi-Language Source Support), HLR-030 (External-Tool Dependency Isolation).
+
+## 14. `print_source_function` ([src/vgp.c](../src/vgp.c))
+
+*   <a id="LLR-PSF-01"></a>**LLR-PSF-01** — Signature:
+    `void print_source_function(const char *source_file, const char *function_name, int line_number)`.
+    *Trace:* HLR-027 (Conditional Source Body Output), HLR-029 (Multi-Language Source Support).
+
+*   <a id="LLR-PSF-02"></a>**LLR-PSF-02** — If `source_file` is `NULL`, `function_name` is
+    `NULL`, or `line_number <= 0`, the function shall write
+    `"Error: Invalid arguments to print_source_function.\n"` to
+    `stderr` and return.
+    *Trace:* HLR-030 (External-Tool Dependency Isolation), HLR-039 (Defensive Argument Validation).
+
+*   <a id="LLR-PSF-03"></a>**LLR-PSF-03** — The function shall first run
+    `ctags --print-language <source_file>` via `execute_command` and
+    shall extract the language token following the `':'` separator. On
+    failure it shall report the failure on `stderr` and return.
+    *Trace:* HLR-029 (Multi-Language Source Support), HLR-030 (External-Tool Dependency Isolation), HLR-043 (External `ctags` Dependency Scope).
+
+*   <a id="LLR-PSF-04"></a>**LLR-PSF-04** — The function shall then run
+    `ctags -o - --c-kinds=f --fields=+ne <source_file> | grep '^<function_name>'`
+    via `execute_command`. On failure it shall write
+    `"Error: Could not find function '%s' in file '%s'.\n"` to `stderr`
+    and return.
+    *Trace:* HLR-029 (Multi-Language Source Support), HLR-030 (External-Tool Dependency Isolation).
+
+*   <a id="LLR-PSF-05"></a>**LLR-PSF-05** — The function shall pass the captured language and
+    ctags record to `parse_ctags_output`. On failure it shall write
+    `"Error: Failed to parse ctags output for function '%s'.\n"` to
+    `stderr` and return.
+    *Trace:* HLR-029 (Multi-Language Source Support), HLR-030 (External-Tool Dependency Isolation).
+
+*   <a id="LLR-PSF-06"></a>**LLR-PSF-06** — The function shall pre-increment `end_line` by 1
+    and shall verify that `start_line > 0`, `end_line > 0`, and
+    `start_line <= end_line`, reporting an error on `stderr` and
+    returning otherwise.
+    *Trace:* HLR-027 (Conditional Source Body Output), HLR-030 (External-Tool Dependency Isolation).
+
+*   <a id="LLR-PSF-07"></a>**LLR-PSF-07** — The function shall open `source_file` via `fopen`
+    in read-only mode. On failure it shall call `perror("fopen")` and
+    return.
+    *Trace:* HLR-027 (Conditional Source Body Output), HLR-030 (External-Tool Dependency Isolation).
+
+*   <a id="LLR-PSF-08"></a>**LLR-PSF-08** — The function shall advance the file to `start_line`
+    by reading lines via `fgets` and shall then print successive lines
+    until `current_line` exceeds `end_line`. Each printed line shall be
+    formatted as `"%c%4d %s"`, where the leading character is `'>'` for
+    the offending `line_number` and `' '` otherwise.
+    *Trace:* HLR-027 (Conditional Source Body Output), HLR-038 (Stateful Parsing Context).
+
+*   <a id="LLR-PSF-09"></a>**LLR-PSF-09** — The function shall call `fclose` on the source file
+    before returning.
+    *Trace:* HLR-008 (Resource Management).
+
+## 15. `initialize_parse_state` ([src/vgp.c](../src/vgp.c))
+
+*   <a id="LLR-IPS-01"></a>**LLR-IPS-01** — Signature:
+    `void initialize_parse_state(ParseState *state)`.
+    *Trace:* HLR-038 (Stateful Parsing Context).
+
+*   <a id="LLR-IPS-02"></a>**LLR-IPS-02** — If `state` is `NULL`, the function shall return
+    without side effects.
+    *Trace:* HLR-039 (Defensive Argument Validation).
+
+*   <a id="LLR-IPS-03"></a>**LLR-IPS-03** — Otherwise the function shall set, in this order:
+    `in_error_block = false`, `print_function = false`,
+    `stack_lines_shown = 0`, `user_code_found_for_error = false`,
+    `current_error_type[0] = '\0'`, `error_filename[0] = '\0'`,
+    `error_function_name[0] = '\0'`, `error_line_number = -1`, and
+    `error_count = 0`.
+    *Trace:* HLR-038 (Stateful Parsing Context).
+
+## 16. `check_start_new_error` ([src/vgp.c](../src/vgp.c))
+
+*   <a id="LLR-CSNE-01"></a>**LLR-CSNE-01** — Signature:
+    `bool check_start_new_error(const char *line_content, ParseState *state)`.
+    *Trace:* HLR-016 (Error Block Detection).
+
+*   <a id="LLR-CSNE-02"></a>**LLR-CSNE-02** — If `line_content` or `state` is `NULL`, the
+    function shall return `false`.
+    *Trace:* HLR-039 (Defensive Argument Validation).
+
+*   <a id="LLR-CSNE-03"></a>**LLR-CSNE-03** — If `state->in_error_block` is already `true`, the
+    function shall return `false` without searching for keywords.
+    *Trace:* HLR-016 (Error Block Detection), HLR-038 (Stateful Parsing Context).
+
+*   <a id="LLR-CSNE-04"></a>**LLR-CSNE-04** — The function shall iterate `ERROR_KEYWORDS` and
+    test each entry against `line_content` via `strstr`. On the first
+    match it shall:
+    1.  Call `print_error_header(line_content, state)`.
+    2.  Copy `ERROR_KEYWORDS[i]` into `state->current_error_type` via
+        `strncpy` bounded by `sizeof(state->current_error_type) - 1`,
+        then null-terminate the buffer's last byte.
+    3.  Set `state->in_error_block = true`,
+        `state->stack_lines_shown = 0`,
+        `state->user_code_found_for_error = false`, and
+        `state->print_function = false`.
+    4.  Return `true`.
+    *Trace:* HLR-016 (Error Block Detection), HLR-018 (Error Header Rendering), HLR-038 (Stateful Parsing Context).
+
+*   <a id="LLR-CSNE-05"></a>**LLR-CSNE-05** — If no keyword matches, the function shall return
+    `false` without modifying `state`.
+    *Trace:* HLR-016 (Error Block Detection).
+
+## 17. `process_stack_trace_line` ([src/vgp.c](../src/vgp.c))
+
+*   <a id="LLR-PSTL-01"></a>**LLR-PSTL-01** — Signature:
+    `void process_stack_trace_line(const char *line_content, ParseState *state)`.
+    *Trace:* HLR-020 (Stack Frame Recognition), HLR-021 (Stack Frame Decoding).
+
+*   <a id="LLR-PSTL-02"></a>**LLR-PSTL-02** — If `line_content` or `state` is `NULL`, the
+    function shall return without side effects.
+    *Trace:* HLR-039 (Defensive Argument Validation).
+
+*   <a id="LLR-PSTL-03"></a>**LLR-PSTL-03** — The function shall evaluate the predicate
+    `state->stack_lines_shown < STACK_TRACE_CONTEXT_LINES ||
+    is_user_code_stack_trace(line_content)`.
+    *Trace:* HLR-022 (User-Code Classification), HLR-023 (Bounded Stack Trace Output).
+
+*   <a id="LLR-PSTL-04"></a>**LLR-PSTL-04** — When that predicate is true and either
+    `app_config.print_stack` or `app_config.verbose` is true, the
+    function shall format `line_content` via `get_function_name` into a
+    local `MAX_LINE_LENGTH` buffer, print `"  - %s"` of that buffer to
+    `stdout`, and increment `state->stack_lines_shown`.
+    *Trace:* HLR-012 (Verbose Mode), HLR-021 (Stack Frame Decoding), HLR-024 (Stack Trace Output Gated by Options), HLR-028 (Editor-Jumpable References).
+
+*   <a id="LLR-PSTL-05"></a>**LLR-PSTL-05** — When the predicate is true,
+    `state->user_code_found_for_error` is `false`, and
+    `is_user_code_stack_trace(line_content)` returns `true`, the
+    function shall set `state->user_code_found_for_error = true` and
+    shall assign the result of
+    `extract_file_and_line(line_content, state->error_filename,
+    state->error_function_name, &state->error_line_number)` to
+    `state->print_function`.
+    *Trace:* HLR-022 (User-Code Classification), HLR-025 (First-User-Frame Capture).
+
+*   <a id="LLR-PSTL-06"></a>**LLR-PSTL-06** — When the predicate is false,
+    `state->user_code_found_for_error` is false, and
+    `state->stack_lines_shown == STACK_TRACE_CONTEXT_LINES`, and either
+    `app_config.print_stack` or `app_config.verbose` is true, the
+    function shall print `"  - ...\n"` to `stdout` and increment
+    `state->stack_lines_shown` to suppress further ellipses.
+    *Trace:* HLR-023 (Bounded Stack Trace Output), HLR-024 (Stack Trace Output Gated by Options).
+
+## 18. `finalize_error_block` ([src/vgp.c](../src/vgp.c))
+
+*   <a id="LLR-FEB-01"></a>**LLR-FEB-01** — Signature: `void finalize_error_block(ParseState *state)`.
+    *Trace:* HLR-017 (Error Block Termination), HLR-026 (Conditional Source Reference Output).
+
+*   <a id="LLR-FEB-02"></a>**LLR-FEB-02** — If `state` is `NULL`, the function shall return
+    without side effects.
+    *Trace:* HLR-039 (Defensive Argument Validation).
+
+*   <a id="LLR-FEB-03"></a>**LLR-FEB-03** — When `state->user_code_found_for_error` is `false`
+    and `state->stack_lines_shown > 0`, the function shall print
+    `"  (-> Check stack trace above for user code related to '%s')\n"`
+    to `stdout`, substituting `state->current_error_type`.
+    *Trace:* HLR-022 (User-Code Classification), HLR-025 (First-User-Frame Capture).
+
+*   <a id="LLR-FEB-04"></a>**LLR-FEB-04** — When `state->print_function` is `true`, the function
+    shall print `"Source (%s:%d)\n"` to `stdout`, substituting
+    `state->error_filename` and `state->error_line_number`.
+    *Trace:* HLR-026 (Conditional Source Reference Output), HLR-028 (Editor-Jumpable References).
+
+*   <a id="LLR-FEB-05"></a>**LLR-FEB-05** — When `state->print_function` is `true` and either
+    `app_config.print_source` or `app_config.verbose` is `true`, the
+    function shall call
+    `print_source_function(state->error_filename, state->error_function_name, state->error_line_number)`
+    and shall print a trailing newline.
+    *Trace:* HLR-012 (Verbose Mode), HLR-027 (Conditional Source Body Output), HLR-043 (External `ctags` Dependency Scope).
+
+*   <a id="LLR-FEB-06"></a>**LLR-FEB-06** — Before returning, the function shall set
+    `state->in_error_block = false` and `state->print_function = false`.
+    *Trace:* HLR-017 (Error Block Termination), HLR-038 (Stateful Parsing Context).
+
+## 19. `process_in_error_block` ([src/vgp.c](../src/vgp.c))
+
+*   <a id="LLR-PIEB-01"></a>**LLR-PIEB-01** — Signature:
+    `void process_in_error_block(const char *line_content, ParseState *state)`.
+    *Trace:* HLR-017 (Error Block Termination), HLR-020 (Stack Frame Recognition).
+
+*   <a id="LLR-PIEB-02"></a>**LLR-PIEB-02** — If `line_content` or `state` is `NULL`, the
+    function shall return without side effects.
+    *Trace:* HLR-039 (Defensive Argument Validation).
+
+*   <a id="LLR-PIEB-03"></a>**LLR-PIEB-03** — When `line_content` begins with `"   at "` or
+    `"   by "` (matched via `strncmp` of the leading 6 characters),
+    the function shall call `process_stack_trace_line(line_content, state)`.
+    *Trace:* HLR-020 (Stack Frame Recognition), HLR-021 (Stack Frame Decoding).
+
+*   <a id="LLR-PIEB-04"></a>**LLR-PIEB-04** — Otherwise the function shall call
+    `finalize_error_block(state)`.
+    *Trace:* HLR-017 (Error Block Termination), HLR-026 (Conditional Source Reference Output), HLR-027 (Conditional Source Body Output).
+
+## 20. `process_summary_lines` ([src/vgp.c](../src/vgp.c))
+
+*   <a id="LLR-PSL-01"></a>**LLR-PSL-01** — Signature:
+    `void process_summary_lines(const char *line_content, ParseState *state)`.
+    *Trace:* HLR-031 (Leak Summary Recognition), HLR-034 (Final Error Summary Output).
+
+*   <a id="LLR-PSL-02"></a>**LLR-PSL-02** — If `line_content` is `NULL`, the function shall
+    return without side effects.
+    *Trace:* HLR-039 (Defensive Argument Validation).
+
+*   <a id="LLR-PSL-03"></a>**LLR-PSL-03** — When `line_content` contains `"LEAK SUMMARY:"` and
+    either `app_config.print_leak_summary` or `app_config.verbose` is
+    `true`, the function shall print `"\n--- LEAK SUMMARY ---\n"` to
+    `stdout`.
+    *Trace:* HLR-012 (Verbose Mode), HLR-031 (Leak Summary Recognition), HLR-032 (Leak Summary Output Gated by Options).
+
+*   <a id="LLR-PSL-04"></a>**LLR-PSL-04** — When `line_content` contains one of
+    `"definitely lost:"`, `"indirectly lost:"`, `"possibly lost:"`, or
+    `"still reachable:"` and either `app_config.print_leak_summary` or
+    `app_config.verbose` is `true`, the function shall call
+    `print_leak_summary_line(line_content, label)` with `label`
+    respectively `"Definitely Lost"`, `"Indirectly Lost"`,
+    `"Possibly Lost"`, or `"Still Reachable"`.
+    *Trace:* HLR-012 (Verbose Mode), HLR-031 (Leak Summary Recognition), HLR-032 (Leak Summary Output Gated by Options), HLR-033 (Leak Detail Formatting).
+
+*   <a id="LLR-PSL-05"></a>**LLR-PSL-05** — When `line_content` contains `"ERROR SUMMARY:"`
+    the function shall call `print_final_error_summary(line_content,
+    state)` regardless of any configuration flag.
+    *Trace:* HLR-034 (Final Error Summary Output).
+
+## 21. `process_log_file` ([src/vgp.c](../src/vgp.c))
+
+*   <a id="LLR-PLF-01"></a>**LLR-PLF-01** — Signature: `void process_log_file(FILE *file)`.
+    *Trace:* HLR-006 (Parser Module Invocation), HLR-036 (Streaming Single-Pass Operation).
+
+*   <a id="LLR-PLF-02"></a>**LLR-PLF-02** — If `file` is `NULL`, the function shall return
+    without side effects.
+    *Trace:* HLR-039 (Defensive Argument Validation).
+
+*   <a id="LLR-PLF-03"></a>**LLR-PLF-03** — The function shall declare a local `line` buffer of
+    `MAX_LINE_LENGTH` bytes and a local `ParseState state`, and shall
+    call `initialize_parse_state(&state)`.
+    *Trace:* HLR-037 (Bounded Line Buffer), HLR-038 (Stateful Parsing Context).
+
+*   <a id="LLR-PLF-04"></a>**LLR-PLF-04** — The function shall iterate by calling
+    `fgets(line, sizeof(line), file)` until EOF.
+    *Trace:* HLR-036 (Streaming Single-Pass Operation), HLR-037 (Bounded Line Buffer).
+
+*   <a id="LLR-PLF-05"></a>**LLR-PLF-05** — On each iteration the function shall first call
+    `strip_valgrind_pid_prefix(line)` and shall use the returned
+    pointer as `line_content` for all subsequent dispatch.
+    *Trace:* HLR-014 (PID-Prefix Stripping).
+
+*   <a id="LLR-PLF-06"></a>**LLR-PLF-06** — When `state.in_error_block` is `false` and the
+    `line_content` consists only of characters in `" \t\n\r"`
+    (`strspn` equal to `strlen`), the iteration shall `continue` to the
+    next line.
+    *Trace:* HLR-015 (Whitespace Skipping Outside Error Blocks).
+
+*   <a id="LLR-PLF-07"></a>**LLR-PLF-07** — When `state.in_error_block` is `true`, the function
+    shall call `process_in_error_block(line_content, &state)`. After
+    that call the function shall continue with the same iteration so
+    that a finalised block's terminating line can also be evaluated by
+    the new-error and summary paths.
+    *Trace:* HLR-017 (Error Block Termination), HLR-020 (Stack Frame Recognition).
+
+*   <a id="LLR-PLF-08"></a>**LLR-PLF-08** — When `state.in_error_block` is `false`, the function
+    shall call `check_start_new_error(line_content, &state)`. If it
+    returns `true`, the iteration shall `continue` to the next line.
+    *Trace:* HLR-016 (Error Block Detection), HLR-018 (Error Header Rendering).
+
+*   <a id="LLR-PLF-09"></a>**LLR-PLF-09** — When `state.in_error_block` is `false` and
+    `check_start_new_error` returned `false`, the function shall call
+    `process_summary_lines(line_content, &state)`.
+    *Trace:* HLR-031 (Leak Summary Recognition), HLR-034 (Final Error Summary Output).
+
+*   <a id="LLR-PLF-10"></a>**LLR-PLF-10** — After the read loop terminates, if
+    `state.in_error_block` is `true`, the function shall call
+    `finalize_error_block(&state)` and shall print
+    `"----------------------------------------\n\n"` to `stdout`.
+    *Trace:* HLR-019 (End-of-Log Error-Block Finalisation), HLR-026 (Conditional Source Reference Output).

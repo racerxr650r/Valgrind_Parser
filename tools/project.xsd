@@ -1,0 +1,535 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  XML Schema for Project.xml — the single source of truth for a
+  project's spec stack (PVD / SDD / HLRs / LLRs / STP / Traceability).
+
+  Companion to tools/Project_xml_README.md (human-facing schema
+  reference) and tools/lint_project.py (validator + semantic checker).
+
+  This schema covers the structural shape of Project.xml. The semantic
+  rules it cannot express (every <trace> resolves; HLR/LLR id formats;
+  no orphan ids; metadata document set matches expectations) are
+  enforced by tools/lint_project.py.
+
+  Editor support: doc/Project.xml references this file via
+  xsi:noNamespaceSchemaLocation, so any XSD-aware editor (VS Code's
+  Red Hat XML extension, IntelliJ, oXygen, etc.) will provide
+  autocomplete and inline validation.
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           elementFormDefault="qualified">
+
+  <!-- ============================================================ -->
+  <!-- Reusable simple types                                         -->
+  <!-- ============================================================ -->
+
+  <xs:simpleType name="NonEmptyString">
+    <xs:restriction base="xs:string">
+      <xs:minLength value="1"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="HlrId">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="HLR-[0-9]{3,}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="LlrId">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="LLR-[A-Z0-9]+-[0-9]{2,}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="TraceTarget">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="SDD"/>
+      <xs:enumeration value="HLR"/>
+      <xs:enumeration value="LLR"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- ============================================================ -->
+  <!-- Markdown-bearing element: leaf with mixed content. Used for   -->
+  <!-- elements whose body is markdown text (often wrapped in CDATA).-->
+  <!-- We use mixed=true and allow no child elements so the parser   -->
+  <!-- accepts arbitrary text including escaped < > & characters.    -->
+  <!-- ============================================================ -->
+
+  <xs:complexType name="MdText" mixed="true">
+    <xs:sequence/>
+  </xs:complexType>
+
+  <!-- ============================================================ -->
+  <!-- <metadata>                                                    -->
+  <!-- ============================================================ -->
+
+  <xs:complexType name="Document">
+    <xs:attribute name="id"      type="NonEmptyString" use="required"/>
+    <xs:attribute name="title"   type="NonEmptyString" use="required"/>
+    <xs:attribute name="source"  type="NonEmptyString" use="required"/>
+    <xs:attribute name="version" type="xs:string"      use="required"/>
+    <xs:attribute name="date"    type="xs:string"      use="required"/>
+    <xs:attribute name="author"  type="xs:string"      use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="Counts">
+    <xs:sequence>
+      <xs:element name="count" minOccurs="0" maxOccurs="unbounded">
+        <xs:complexType>
+          <xs:attribute name="name"  type="NonEmptyString" use="required"/>
+          <xs:attribute name="value" type="xs:string"      use="required"/>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="Metadata">
+    <xs:sequence>
+      <xs:element name="document" type="Document" minOccurs="1" maxOccurs="unbounded"/>
+      <xs:element name="counts"   type="Counts"   minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- ============================================================ -->
+  <!-- <sdd>                                                         -->
+  <!-- ============================================================ -->
+
+  <xs:complexType name="SddScopeFile" mixed="true">
+    <xs:attribute name="path" type="NonEmptyString" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="SddScope">
+    <xs:sequence>
+      <xs:element name="intro" type="MdText"      minOccurs="0"/>
+      <xs:element name="file"  type="SddScopeFile" minOccurs="0" maxOccurs="unbounded"/>
+      <xs:element name="outro" type="MdText"      minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="SddOverview">
+    <xs:sequence>
+      <xs:element name="para" type="MdText" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="SddTerm" mixed="true">
+    <xs:attribute name="name" type="NonEmptyString" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="SddDefinitions">
+    <xs:sequence>
+      <xs:element name="term" type="SddTerm" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="SddReferences">
+    <xs:sequence>
+      <xs:element name="ref" type="MdText" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="SddComponent" mixed="true">
+    <xs:attribute name="path" type="NonEmptyString" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="SddFlow">
+    <xs:sequence>
+      <xs:element name="intro" type="MdText" minOccurs="0"/>
+      <xs:element name="step"  type="MdText" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="SddArchitecture">
+    <xs:sequence>
+      <xs:element name="intro"     type="MdText"        minOccurs="0"/>
+      <xs:element name="component" type="SddComponent"  minOccurs="0" maxOccurs="unbounded"/>
+      <xs:element name="flow"      type="SddFlow"       minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="SddGoal" mixed="true">
+    <xs:attribute name="name" type="NonEmptyString" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="SddDesignGoals">
+    <xs:sequence>
+      <xs:element name="goal" type="SddGoal" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="SddInterface" mixed="true">
+    <xs:attribute name="title" type="NonEmptyString" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="SddInterfaces">
+    <xs:sequence>
+      <xs:element name="prose"     type="MdText"       minOccurs="0"/>
+      <xs:element name="interface" type="SddInterface" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="title_suffix" type="xs:string" use="optional"/>
+  </xs:complexType>
+
+  <xs:complexType name="SddFunctionLogic">
+    <xs:sequence>
+      <xs:element name="step" type="MdText" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="SddFunction">
+    <xs:sequence>
+      <xs:element name="summary" type="MdText"           minOccurs="0"/>
+      <xs:element name="purpose" type="MdText"           minOccurs="0"/>
+      <xs:element name="pre"     type="MdText"           minOccurs="0"/>
+      <xs:element name="post"    type="MdText"           minOccurs="0"/>
+      <xs:element name="returns" type="MdText"           minOccurs="0"/>
+      <xs:element name="logic"   type="SddFunctionLogic" minOccurs="0"/>
+      <xs:element name="notes"   type="MdText"           minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute name="signature" type="NonEmptyString" use="required"/>
+    <xs:attribute name="summary"   type="xs:string"      use="optional"/>
+  </xs:complexType>
+
+  <xs:complexType name="SddFunctionGroup">
+    <xs:sequence>
+      <xs:element name="function" type="SddFunction" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="name" type="NonEmptyString" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="SddFunctions">
+    <xs:sequence>
+      <xs:element name="intro" type="MdText" minOccurs="0"/>
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element name="function" type="SddFunction"/>
+        <xs:element name="group"    type="SddFunctionGroup"/>
+      </xs:choice>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="SddDep" mixed="true"/>
+
+  <xs:complexType name="SddDependencies">
+    <xs:sequence>
+      <xs:element name="dep" type="SddDep" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="SddErrorCase" mixed="true">
+    <xs:attribute name="name" type="NonEmptyString" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="SddErrorHandling">
+    <xs:sequence>
+      <xs:element name="case" type="SddErrorCase" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="SddModule">
+    <xs:sequence>
+      <xs:element name="purpose"         type="MdText"            minOccurs="0"/>
+      <xs:element name="responsibility"  type="MdText"            minOccurs="0" maxOccurs="unbounded"/>
+      <xs:element name="interfaces"      type="SddInterfaces"     minOccurs="0"/>
+      <xs:element name="data_structures" type="MdText"            minOccurs="0"/>
+      <xs:element name="functions"       type="SddFunctions"      minOccurs="0"/>
+      <xs:element name="algorithm"       type="MdText"            minOccurs="0"/>
+      <xs:element name="dependencies"    type="SddDependencies"   minOccurs="0"/>
+      <xs:element name="error_handling"  type="SddErrorHandling"  minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute name="path"  type="xs:string" use="optional"/>
+    <xs:attribute name="title" type="xs:string" use="optional"/>
+  </xs:complexType>
+
+  <xs:complexType name="SddModules">
+    <xs:sequence>
+      <xs:element name="module" type="SddModule" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="SddDictType">
+    <xs:sequence>
+      <xs:element name="field" minOccurs="0" maxOccurs="unbounded">
+        <xs:complexType>
+          <xs:attribute name="name" type="NonEmptyString" use="required"/>
+          <xs:attribute name="type" type="xs:string"      use="optional"/>
+          <xs:attribute name="desc" type="xs:string"      use="optional"/>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+    <xs:attribute name="name"        type="NonEmptyString" use="required"/>
+    <xs:attribute name="header"      type="xs:string"      use="optional"/>
+    <xs:attribute name="instance"    type="xs:string"      use="optional"/>
+    <xs:attribute name="instance_in" type="xs:string"      use="optional"/>
+    <xs:attribute name="summary"     type="xs:string"      use="optional"/>
+  </xs:complexType>
+
+  <xs:complexType name="SddDictConstants">
+    <xs:sequence>
+      <xs:element name="constant" minOccurs="0" maxOccurs="unbounded">
+        <xs:complexType>
+          <xs:attribute name="name"    type="NonEmptyString" use="required"/>
+          <xs:attribute name="value"   type="xs:string"      use="optional"/>
+          <xs:attribute name="purpose" type="xs:string"      use="optional"/>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+    <xs:attribute name="header" type="xs:string" use="optional"/>
+  </xs:complexType>
+
+  <xs:complexType name="SddDataDictionary">
+    <xs:sequence>
+      <xs:element name="type"      type="SddDictType"      minOccurs="0" maxOccurs="unbounded"/>
+      <xs:element name="constants" type="SddDictConstants" minOccurs="0" maxOccurs="unbounded"/>
+      <xs:element name="other"     type="MdText"           minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="SddTraceability">
+    <xs:sequence>
+      <xs:element name="theme" minOccurs="0" maxOccurs="unbounded">
+        <xs:complexType>
+          <xs:attribute name="name"     type="NonEmptyString" use="required"/>
+          <xs:attribute name="sections" type="xs:string"      use="required"/>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="Sdd">
+    <xs:all>
+      <xs:element name="kind"            type="MdText"             minOccurs="0"/>
+      <xs:element name="audience"        type="MdText"             minOccurs="0"/>
+      <xs:element name="scope"           type="SddScope"           minOccurs="0"/>
+      <xs:element name="overview"        type="SddOverview"        minOccurs="0"/>
+      <xs:element name="definitions"     type="SddDefinitions"     minOccurs="0"/>
+      <xs:element name="references"      type="SddReferences"      minOccurs="0"/>
+      <xs:element name="architecture"    type="SddArchitecture"    minOccurs="0"/>
+      <xs:element name="design_goals"    type="SddDesignGoals"     minOccurs="0"/>
+      <xs:element name="modules"         type="SddModules"         minOccurs="0"/>
+      <xs:element name="data_dictionary" type="SddDataDictionary"  minOccurs="0"/>
+      <xs:element name="traceability"    type="SddTraceability"    minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+  <!-- ============================================================ -->
+  <!-- <stp>                                                         -->
+  <!-- ============================================================ -->
+
+  <xs:complexType name="StpRelated">
+    <xs:sequence>
+      <xs:element name="doc" type="MdText" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="StpIntroduction">
+    <xs:sequence>
+      <xs:element name="purpose" type="MdText"      minOccurs="0"/>
+      <xs:element name="scope"   type="MdText"      minOccurs="0"/>
+      <xs:element name="related" type="StpRelated"  minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="StpLevels">
+    <xs:sequence>
+      <xs:element name="level" minOccurs="0" maxOccurs="unbounded">
+        <xs:complexType>
+          <xs:attribute name="name"   type="NonEmptyString" use="required"/>
+          <xs:attribute name="source" type="xs:string"      use="optional"/>
+          <xs:attribute name="driver" type="xs:string"      use="optional"/>
+          <xs:attribute name="style"  type="xs:string"      use="optional"/>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="StpBuildExecution">
+    <xs:sequence>
+      <xs:element name="intro" type="MdText" minOccurs="0"/>
+      <xs:element name="step"  type="MdText" maxOccurs="unbounded"/>
+      <xs:element name="outro" type="MdText" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="StpPassFail">
+    <xs:sequence>
+      <xs:element name="criterion" type="MdText" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="StpStrategy">
+    <xs:all>
+      <xs:element name="levels"                  type="StpLevels"          minOccurs="0"/>
+      <xs:element name="framework"               type="MdText"             minOccurs="0"/>
+      <xs:element name="build_execution"         type="StpBuildExecution"  minOccurs="0"/>
+      <xs:element name="pass_fail"               type="StpPassFail"        minOccurs="0"/>
+      <xs:element name="traceability_convention" type="MdText"             minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="StpArtefact">
+    <xs:attribute name="key"   type="NonEmptyString" use="required"/>
+    <xs:attribute name="label" type="NonEmptyString" use="required"/>
+    <xs:attribute name="path"  type="NonEmptyString" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="StpFixture">
+    <xs:sequence>
+      <xs:element name="artefact" type="StpArtefact" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="name"   type="NonEmptyString" use="required"/>
+    <xs:attribute name="source" type="xs:string"      use="optional"/>
+  </xs:complexType>
+
+  <xs:complexType name="StpIntegrationEnvironment">
+    <xs:sequence>
+      <xs:element name="intro"   type="MdText"     minOccurs="0"/>
+      <xs:element name="fixture" type="StpFixture" minOccurs="0" maxOccurs="unbounded"/>
+      <xs:element name="outro"   type="MdText"     minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="StpTooling">
+    <xs:sequence>
+      <xs:element name="tool" minOccurs="0" maxOccurs="unbounded">
+        <xs:complexType>
+          <xs:attribute name="name"         type="NonEmptyString" use="required"/>
+          <xs:attribute name="required_for" type="xs:string"      use="optional"/>
+          <xs:attribute name="notes"        type="xs:string"      use="optional"/>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="Stp">
+    <xs:all>
+      <xs:element name="introduction"            type="StpIntroduction"           minOccurs="0"/>
+      <xs:element name="strategy"                type="StpStrategy"               minOccurs="0"/>
+      <xs:element name="integration_environment" type="StpIntegrationEnvironment" minOccurs="0"/>
+      <xs:element name="tooling"                 type="StpTooling"                minOccurs="0"/>
+      <xs:element name="maintenance"             type="MdText"                    minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+  <!-- ============================================================ -->
+  <!-- Traces (used by hlr / llr / test)                             -->
+  <!-- ============================================================ -->
+
+  <xs:complexType name="Trace">
+    <xs:attribute name="target" type="TraceTarget"    use="required"/>
+    <xs:attribute name="ref"    type="NonEmptyString" use="required"/>
+    <xs:attribute name="name"   type="xs:string"      use="optional"/>
+  </xs:complexType>
+
+  <xs:complexType name="Traces">
+    <xs:sequence>
+      <xs:element name="trace" type="Trace" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- ============================================================ -->
+  <!-- <hlrs>                                                        -->
+  <!-- ============================================================ -->
+
+  <xs:complexType name="Hlr">
+    <xs:sequence>
+      <xs:element name="text"   type="MdText" minOccurs="0"/>
+      <xs:element name="traces" type="Traces" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute name="id"   type="HlrId"          use="required"/>
+    <xs:attribute name="name" type="NonEmptyString" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="HlrSection">
+    <xs:sequence>
+      <xs:element name="intro" type="MdText" minOccurs="0"/>
+      <xs:element name="hlr"   type="Hlr"    minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="number" type="xs:string"      use="required"/>
+    <xs:attribute name="title"  type="NonEmptyString" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="Hlrs">
+    <xs:sequence>
+      <xs:element name="section" type="HlrSection" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- ============================================================ -->
+  <!-- <llrs>                                                        -->
+  <!-- ============================================================ -->
+
+  <xs:complexType name="Llr">
+    <xs:sequence>
+      <xs:element name="text"   type="MdText" minOccurs="0"/>
+      <xs:element name="traces" type="Traces" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute name="id" type="LlrId" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="LlrFunction">
+    <xs:sequence>
+      <xs:element name="intro" type="MdText" minOccurs="0"/>
+      <xs:element name="llr"   type="Llr"    minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="number" type="xs:string"      use="required"/>
+    <xs:attribute name="title"  type="NonEmptyString" use="required"/>
+    <xs:attribute name="name"   type="NonEmptyString" use="required"/>
+    <xs:attribute name="source" type="xs:string"      use="optional"/>
+  </xs:complexType>
+
+  <xs:complexType name="Llrs">
+    <xs:sequence>
+      <xs:element name="function" type="LlrFunction" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- ============================================================ -->
+  <!-- <tests>                                                       -->
+  <!-- ============================================================ -->
+
+  <xs:complexType name="Test">
+    <xs:sequence>
+      <xs:element name="purpose" type="MdText" minOccurs="0"/>
+      <xs:element name="traces"  type="Traces" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute name="name" type="NonEmptyString" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="TestFile">
+    <xs:sequence>
+      <xs:element name="header" type="MdText" minOccurs="0"/>
+      <xs:element name="test"   type="Test"   minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="path"  type="NonEmptyString" use="required"/>
+    <!-- role is project-defined and free-form by design -->
+    <xs:attribute name="role"  type="xs:string"      use="optional"/>
+    <xs:attribute name="count" type="xs:string"      use="optional"/>
+  </xs:complexType>
+
+  <xs:complexType name="Tests">
+    <xs:sequence>
+      <xs:element name="file" type="TestFile" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- ============================================================ -->
+  <!-- <project> root                                                -->
+  <!-- ============================================================ -->
+
+  <xs:element name="project">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="metadata" type="Metadata" minOccurs="1"/>
+        <xs:element name="sdd"      type="Sdd"      minOccurs="0"/>
+        <xs:element name="stp"      type="Stp"      minOccurs="0"/>
+        <xs:element name="hlrs"     type="Hlrs"     minOccurs="0"/>
+        <xs:element name="llrs"     type="Llrs"     minOccurs="0"/>
+        <xs:element name="tests"    type="Tests"    minOccurs="0"/>
+      </xs:all>
+      <xs:attribute name="name"           type="NonEmptyString" use="required"/>
+      <xs:attribute name="short_name"     type="NonEmptyString" use="required"/>
+      <xs:attribute name="schema_version" type="NonEmptyString" use="required"/>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>

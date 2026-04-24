@@ -1,0 +1,56 @@
+{#-
+  LLRs.md.j2 — Jinja2 template for the Low-Level Requirements document.
+
+  Owns ALL standard scaffolding: H1 title, version/date/author block,
+  per-function H2 headings, per-requirement bullet shape, and the
+  "*Trace:*" footer. Project-specific content comes from the <llrs>
+  payload of doc/Project.xml.
+
+  Data shape (see tools/Project_xml_README.md for the full schema):
+
+      project.metadata.{title,version,date,author}
+      project.name           — long project name
+      project.short_name     — short project name
+      project.llrs           — list of <function> groups, each:
+          .number            — section number (string)
+          .title             — section title (markdown allowed; e.g.
+                               "`main` ([src/main.c](../src/main.c))")
+          .name              — short symbol name (used for cross-refs)
+          .source            — source file path (informational)
+          .intro             — markdown intro paragraph (may be empty)
+          .llrs              — list of <llr> objects:
+              .id            — e.g. "LLR-MAIN-01"
+              .text          — markdown body (verbatim)
+              .traces        — list of <trace target ref [name]/>
+                               SimpleNamespaces
+
+  By convention <function number="1"> is the document's "Introduction"
+  group and carries the identifier-scheme prose in its <intro>; it
+  has no <llr> children. The template handles both cases uniformly.
+
+  Trace rendering: each <trace target="HLR" ref="HLR-NNN" name="..."/>
+  renders as "HLR-NNN (Name)". When the optional name attribute is
+  absent, only the bare ID is emitted.
+-#}
+{%- macro render_trace(tr) -%}
+{{ tr.ref }}{% if tr.name %} ({{ tr.name }}){% endif %}
+{%- endmacro -%}
+# {{ project.metadata.title }}
+
+**Version:** {{ project.metadata.version }}
+**Date:** {{ project.metadata.date }}
+**Author(s):** {{ project.metadata.author }}
+
+{% for grp in project.llrs %}
+## {{ grp.number }}. {{ grp.title }}
+
+{% if grp.intro %}{{ grp.intro }}
+
+{% endif -%}
+{% for llr in grp.llrs %}
+*   <a id="{{ llr.id }}"></a>**{{ llr.id }}** — {{ llr.text | indent(4) }}
+{% if llr.traces %}    *Trace:* {% for tr in llr.traces %}{{ render_trace(tr) }}{% if not loop.last %}, {% endif %}{% endfor %}.
+{% endif %}
+
+{% endfor %}
+{% endfor -%}

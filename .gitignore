@@ -55,3 +55,7 @@ Mkfile.old
 dkms.conf
 test_vgp.cpp.gcov
 vgp.c.gcov
+
+# Python
+__pycache__/
+*.py[cod]

@@ -1,0 +1,300 @@
+{#-
+  SDD.md.j2 — Jinja2 template for a Software Design Document.
+
+  This template owns ALL standard SDD scaffolding: section numbering,
+  standard section titles ("Introduction", "Purpose of the Document",
+  "System Overview", "Detailed Design for X", "Data Dictionary",
+  "Traceability"), boilerplate lead-in sentences, table headers, and
+  the auto-generated "Document Overview" section.
+
+  Data is supplied by `doc/Project.xml` and exposed by
+  `tools/render_doc.py` as the `project` namespace:
+
+      project.metadata.{title,version,date,author}
+      project.name           — long project name
+      project.short_name     — short project name
+      project.sdd            — the <sdd> data payload (see schema in
+                               doc/Project.xml comment header)
+
+  The template is intentionally generic: any project that fills in
+  <sdd> with the same shape gets a complete SDD. To adapt to a
+  different SDD outline, edit the standard headings below; the data
+  schema does not need to change.
+
+  Editing tips (literal Jinja delimiters shown with spaces):
+    * Comments use   { # - ... - # }   and are stripped from the output.
+    * Control tags use   { % - ... - % }   for if / for / macro blocks.
+    * Substitutions use   { { ... } }   to inject a value.
+    * Trim markers "-" suppress surrounding whitespace.
+    * The `indent(N)` filter indents continuation lines so multi-line
+      bullet bodies render as one bullet item in markdown.
+    * Recommended VS Code extension: "Better Jinja"
+      (samuelcolvin.jinjahtml) for *.j2 syntax highlighting.
+-#}
+{#- ===================== helper macros ===================== -#}
+{%- macro module_heading(m) -%}
+{%- if m.path -%}[{{ m.path }}](../{{ m.path }}){%- else -%}{{ m.title }}{%- endif -%}
+{%- endmacro -%}
+
+{%- macro bullet(body, indent_width=4) -%}
+*   {{ body | indent(indent_width) }}
+{%- endmacro -%}
+
+{#- Verbose form: Purpose/Pre/Post/Returns/Logic/Notes nested under bullet.
+    Used when the data carries a <purpose> child. Trailing blank line
+    separates consecutive verbose entries. -#}
+{% macro fn_block_verbose(fn) -%}
+*   **`{{ fn.signature }}`**
+    *   Purpose: {{ fn.purpose | indent(8) }}
+{% if fn.pre %}    *   Pre-condition: {{ fn.pre | indent(8) }}
+{% endif -%}
+{% if fn.post %}    *   Post-condition: {{ fn.post | indent(8) }}
+{% endif -%}
+{% if fn.returns %}    *   Return Value: {{ fn.returns | indent(8) }}
+{% endif -%}
+{% if fn.logic %}    *   Logic:
+{% for step in fn.logic %}        {{ loop.index }}.  {{ step | indent(12) }}
+{% endfor -%}
+{% endif -%}
+{% if fn.notes %}    *   Notes: {{ fn.notes | indent(8) }}
+{% endif %}
+{% endmacro -%}
+
+{#- Compact form: signature + summary inline; optional inline numbered
+    steps and optional plain-prose notes. No trailing blank line. -#}
+{% macro fn_block_compact(fn) -%}
+*   **`{{ fn.signature }}`**{% if fn.summary %} — {{ fn.summary | indent(4) }}{% endif %}
+{% if fn.logic %}{% for step in fn.logic %}    {{ loop.index }}.  {{ step | indent(8) }}
+{% endfor -%}
+{% endif -%}
+{% if fn.notes %}
+    {{ fn.notes | indent(4) }}
+{% endif -%}
+{%- endmacro -%}
+
+{%- macro fn_block(fn) -%}
+{% if fn.purpose %}{{ fn_block_verbose(fn) }}{% else %}{{ fn_block_compact(fn) }}{% endif -%}
+{%- endmacro %}
+{#- ====================================================== -#}
+# Software Design Document: {{ project.name }} ({{ project.short_name }})
+
+**Version:** {{ project.metadata.version }}
+**Date:** {{ project.metadata.date }}
+**Author(s):** {{ project.metadata.author }}
+
+## 1. Introduction
+
+### 1.1 Purpose of the Document
+This document provides a detailed design for the `{{ project.short_name }}` ({{ project.name }})
+{{ project.sdd.kind }}. It is intended for {{ project.sdd.audience }}
+of the `{{ project.short_name }}` software.
+
+{% if project.sdd.scope %}
+### 1.2 Scope of the Document
+This document {{ project.sdd.scope.intro }}:
+
+{% for f in project.sdd.scope.files -%}
+*   [{{ f.path }}](../{{ f.path }}): {{ f.body | indent(4) }}
+{% endfor %}
+{%- if project.sdd.scope.outro %}
+
+{{ project.sdd.scope.outro }}
+{% endif %}
+{%- endif %}
+
+{% if project.sdd.overview %}
+### 1.3 Project Overview
+{% for p in project.sdd.overview %}{{ p }}
+
+{% endfor -%}
+{%- endif %}
+
+{%- if project.sdd.definitions %}
+### 1.4 Definitions, Acronyms, and Abbreviations
+{% for t in project.sdd.definitions -%}
+*   **{{ t.name }}:** {{ t.body | indent(4) }}
+{% endfor %}
+{%- endif %}
+
+{% if project.sdd.references -%}
+### 1.5 References
+{% for r in project.sdd.references -%}
+*   {{ r | indent(4) }}
+{% endfor %}
+{%- endif %}
+
+### 1.6 Document Overview
+*   Section 1: Introduction.
+*   Section 2: System Overview.
+{% for m in project.sdd.modules -%}
+*   Section {{ loop.index + 2 }}: Detailed design for {{ module_heading(m) }}.
+{% endfor -%}
+*   Section {{ project.sdd.modules|length + 3 }}: Data Dictionary.
+*   Section {{ project.sdd.modules|length + 4 }}: Traceability.
+
+## 2. System Overview
+
+{% if project.sdd.architecture -%}
+### 2.1 System Architecture
+{{ project.sdd.architecture.intro }}
+
+{% for c in project.sdd.architecture.components -%}
+*   **[{{ c.path }}](../{{ c.path }})** — {{ c.body | indent(4) }}
+{% endfor %}
+{%- if project.sdd.architecture.flow %}
+
+{{ project.sdd.architecture.flow.intro }}
+
+{% for s in project.sdd.architecture.flow.steps -%}
+{{ loop.index }}.  {{ s | indent(4) }}
+{% endfor %}
+{%- endif %}
+{%- endif %}
+
+{% if project.sdd.design_goals -%}
+### 2.2 Design Goals and Constraints
+{% for g in project.sdd.design_goals -%}
+*   **{{ g.name }}:** {{ g.body | indent(4) }}
+{% endfor %}
+{%- endif %}
+
+{%- for m in project.sdd.modules %}
+{%- set sec = loop.index + 2 %}
+
+## {{ sec }}. Detailed Design for {{ module_heading(m) }}
+
+{% if m.purpose or m.responsibilities -%}
+### {{ sec }}.1 Purpose and Responsibilities
+{% if m.purpose -%}
+{{ module_heading(m) }} {{ m.purpose }}
+
+{% endif -%}
+{% for r in m.responsibilities -%}
+*   {{ r | indent(4) }}
+{% endfor %}
+{%- endif %}
+
+{% if m.interfaces %}
+### {{ sec }}.2 External Interfaces{% if m.interfaces.title_suffix %} {{ m.interfaces.title_suffix }}{% endif %}
+
+{% if m.interfaces.intro -%}
+{{ m.interfaces.intro }}
+
+{% endif -%}
+{% if m.interfaces.prose -%}
+{{ m.interfaces.prose }}
+
+{% endif -%}
+{% for iface in m.interfaces.items -%}
+#### {{ sec }}.2.{{ loop.index }} {{ iface.title }}
+
+{{ iface.body }}
+
+{% endfor %}
+{%- endif %}
+
+{% if m.data_structures or m.functions or m.algorithm -%}
+### {{ sec }}.3 Internal Structure
+{%- set sub = namespace(n=0) %}
+{% if m.data_structures %}
+{%- set sub.n = sub.n + 1 %}
+
+#### {{ sec }}.3.{{ sub.n }} Key Data Structures
+
+{{ m.data_structures }}
+
+{% endif -%}
+{% if m.functions %}
+{%- set sub.n = sub.n + 1 %}
+
+#### {{ sec }}.3.{{ sub.n }} Key Functions
+
+{% if m.functions.intro -%}
+{{ m.functions.intro }}
+
+{% endif -%}
+{% for fn in m.functions.flat -%}
+{{ fn_block(fn) }}
+{% endfor -%}
+{% for grp in m.functions.groups %}
+**{{ grp.name }}**
+
+{% for fn in grp.functions -%}
+{{ fn_block(fn) }}
+{% endfor %}
+{% endfor -%}
+{% endif -%}
+{% if m.algorithm %}
+{%- set sub.n = sub.n + 1 %}
+
+#### {{ sec }}.3.{{ sub.n }} Parsing Strategy / Algorithm
+
+{{ m.algorithm }}
+
+{% endif -%}
+{% endif -%}
+
+{% if m.dependencies %}
+### {{ sec }}.4 Dependencies
+
+{% for d in m.dependencies -%}
+*   {{ d | indent(4) }}
+{% endfor %}
+{%- endif %}
+
+{% if m.error_handling %}
+### {{ sec }}.5 Error Handling and Logging
+
+{% for c in m.error_handling -%}
+*   **{{ c.name }}** {{ c.body | indent(4) }}
+{% endfor %}
+{%- endif %}
+{%- endfor %}
+
+{%- set dd_sec = project.sdd.modules|length + 3 -%}
+{%- if project.sdd.data_dictionary %}
+## {{ dd_sec }}. Data Dictionary
+
+{% for t in project.sdd.data_dictionary.types -%}
+*   **`{{ t.name }}`** (defined in [{{ t.header }}](../{{ t.header }}){% if t.instance %}, instantiated as
+    the global `{{ t.instance }}` in [{{ t.instance_in }}](../{{ t.instance_in }}){% endif %}) — {{ t.summary | indent(4) }}
+
+    | Field | Type | Description |
+    | ----- | ---- | ----------- |
+{% for f in t.fields -%}
+    | `{{ f.name }}` | `{{ f.type }}` | {{ f.desc }} |
+{% endfor %}
+{% endfor -%}
+
+{%- if project.sdd.data_dictionary.constants %}
+*   **Compile-time constants** (in [{{ project.sdd.data_dictionary.constants.header }}](../{{ project.sdd.data_dictionary.constants.header }})):
+
+    | Name | Value | Purpose |
+    | ---- | ----- | ------- |
+{% for c in project.sdd.data_dictionary.constants.items -%}
+    | `{{ c.name }}` | {{ c.value }} | {{ c.purpose }} |
+{% endfor %}
+{%- endif %}
+
+{%- if project.sdd.data_dictionary.other %}
+{{ project.sdd.data_dictionary.other }}
+{%- endif %}
+{%- endif %}
+
+{%- set tr_sec = project.sdd.modules|length + 4 %}
+{%- if project.sdd.traceability %}
+
+## {{ tr_sec }}. Traceability
+
+The following table maps the high-level requirements in
+[doc/HLRs.md](HLRs.md) and the low-level requirements in
+[doc/LLRs.md](LLRs.md) to the design elements above. (Requirement IDs
+should be reconciled against the latest revisions of those documents.)
+
+| Requirement Theme | Design Section(s) |
+| ----------------- | ----------------- |
+{% for th in project.sdd.traceability -%}
+| {{ th.name }} | {{ th.sections }} |
+{% endfor %}
+---
+{%- endif %}

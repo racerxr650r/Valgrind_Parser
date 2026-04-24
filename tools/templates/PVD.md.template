@@ -1,0 +1,223 @@
+# Product Vision Document: <Product Name> (<short_name>)
+
+**Version:** 0.1
+**Date:** <YYYY-MM-DD>
+**Author(s):** <Your name(s)>
+
+> **How to use this template.** Each section below contains the
+> *intent* of the section followed by **prompts** to elicit the
+> content. Replace every `<placeholder>` and the prompt block with
+> your own prose. Delete prompts once a section is filled in. Keep
+> the section ordering — the rest of the spec stack (SDD, HLRs,
+> LLRs, STP, Traceability) assumes it.
+>
+> Aim for *short and decisive* over comprehensive. The PVD is the
+> tie-breaker document; if a sentence here cannot survive contact
+> with a real design decision, it does not belong.
+
+## 1. Purpose
+
+This Product Vision Document (PVD) defines *why* `<short_name>`
+exists, *who* it is for, *what* problem it solves, and the
+*measurable outcomes* that determine whether it is succeeding. It
+sits above the [Software Design Document](SDD.md), [High-Level
+Requirements](HLRs.md), [Low-Level Requirements](LLRs.md), and
+[Software Test Plan](STP.md), and is the document the rest of the
+specification stack must remain aligned with.
+
+When in doubt about a feature, scope decision, or trade-off, this
+document is the reference.
+
+> *No prompts — this section is boilerplate. Just substitute the
+> product name above.*
+
+## 2. Vision Statement
+
+> **Prompts**
+> *   In **one sentence**, what does the world look like when this
+>     product is succeeding? Phrase it as a user outcome, not a
+>     feature list.
+> *   Optionally follow with a 2–3 sentence elaboration that names
+>     the *user*, the *task*, and what they are *no longer* forced
+>     to do.
+
+> **<One-sentence vision goes here.>**
+>
+> <Optional elaboration: who the user is, what task they are
+> performing, and what friction this product removes.>
+
+## 3. Problem Statement
+
+> **Prompts**
+> *   What is the status quo without this product?
+> *   What concrete pain points does the current workflow inflict?
+>     List them as bullet points — each one should be the kind of
+>     observation a user would nod at.
+> *   What is the cumulative effect of those pain points (cost,
+>     time, defects missed, decisions deferred)?
+
+<Describe the status quo in 1–3 sentences.>
+
+*   <Pain point 1.>
+*   <Pain point 2.>
+*   <Pain point 3.>
+*   <…>
+
+<One sentence summarising the cumulative cost of the status quo.>
+
+## 4. Target Users
+
+> **Prompts**
+> *   Who are the people this product is *for*? List 3–5 personas.
+>     Each persona is a role + the one or two things they need from
+>     the product. Avoid demographics; focus on goals.
+> *   Who is this product **explicitly not for**? Naming the
+>     non-audience prevents scope creep.
+
+| Persona | Needs from `<short_name>` |
+| ------- | ------------------------- |
+| **<Persona 1>** | <One-line need.> |
+| **<Persona 2>** | <One-line need.> |
+| **<Persona 3>** | <One-line need.> |
+
+`<short_name>` is **not** aimed at: <list non-audiences here>.
+
+## 5. Value Proposition
+
+> **Prompts**
+> *   What does the product *do*, expressed as a small ordered list
+>     of user-visible behaviours? Three to seven items.
+> *   For each item, name the user benefit, not the implementation.
+> *   If there is a single signature design choice that ties the
+>     items together (an output format, a workflow, a guarantee),
+>     state it after the list.
+
+`<short_name>` <one-sentence summary of what it does> by doing
+<N> things, in order:
+
+1.  **<Capability 1>** — <user-visible benefit>.
+2.  **<Capability 2>** — <user-visible benefit>.
+3.  **<Capability 3>** — <user-visible benefit>.
+4.  **<…>**
+
+<Optional: one sentence naming the unifying design choice.>
+
+## 6. Product Principles
+
+> **Prompts**
+> *   What are the **tie-breaker rules** when two reasonable
+>     requirements conflict? These are the principles a reviewer
+>     should be able to cite to reject a proposed feature.
+> *   Aim for 5–8 principles. Each principle should be falsifiable
+>     ("we never do X"), not aspirational ("we strive for X").
+> *   Cover at least: a *performance/architecture* principle, a
+>     *configuration* principle, an *output/interface* principle, a
+>     *dependency* principle, an *error-handling* principle, and a
+>     *verification* principle.
+
+These principles are the tie-breakers when requirements conflict.
+
+1.  **<Principle 1 — short title>.** <One-paragraph rule, including
+    what it rules out.>
+2.  **<Principle 2>.** <…>
+3.  **<Principle 3>.** <…>
+4.  **<Principle 4>.** <…>
+5.  **<Principle 5>.** <…>
+6.  **<Principle 6>.** <…>
+7.  **Verifiable.** Every behaviour worth describing is captured as
+    an HLR/LLR with at least one bound test. The
+    [Traceability Matrix](Traceability.md) is the contract.
+
+## 7. Scope
+
+> **Prompts**
+> *   §7.1 — list every capability that is **in** the product, at
+>     the same granularity as §5. Be specific.
+> *   §7.2 — list capabilities that are **out** of the current
+>     scope. These are things a user might reasonably expect that
+>     are intentionally not provided. Each one prevents a future
+>     "why doesn't this do X?" question.
+> *   §7.3 — list **non-goals**: things this product will *never*
+>     try to be, even in future versions. These constrain the
+>     roadmap.
+
+### 7.1 In Scope
+
+*   <Capability 1.>
+*   <Capability 2.>
+*   <Capability 3.>
+*   <…>
+
+### 7.2 Out of Scope
+
+*   <Capability we deliberately do not provide today.>
+*   <…>
+
+### 7.3 Non-Goals
+
+*   <Direction we will not pursue, ever.>
+*   <…>
+
+## 8. Success Metrics
+
+> **Prompts**
+> *   How will you *know* the product is succeeding? List 4–6
+>     metrics. Each one should be observable without instrumenting
+>     the user.
+> *   Prefer behavioural metrics ("a user can…") over vanity metrics
+>     ("X downloads"). Where a numeric target makes sense, name it.
+> *   Include at least one *coverage*/quality metric and one
+>     *self-quality* metric (the product, applied to itself or to
+>     its own output).
+
+`<short_name>` is succeeding when:
+
+| Metric | Target |
+| ------ | ------ |
+| **<Metric 1 — short title>** | <Observable outcome.> |
+| **<Metric 2>** | <Observable outcome.> |
+| **<Metric 3>** | <Observable outcome.> |
+| **Coverage** | Every requirement in [HLRs.md](HLRs.md) and [LLRs.md](LLRs.md) is bound to at least one test in [STP.md](STP.md), per [Traceability.md](Traceability.md). Coverage gaps are documented, not silent. |
+| **<Metric 5>** | <…> |
+
+## 9. Roadmap Themes
+
+> **Prompts**
+> *   Name 3–6 *themes* (not features) that frame future investment.
+>     A theme is a direction; an HLR is a commitment.
+> *   For each theme, write one sentence on the user value and one
+>     on what would gate the work (demand, dependency,
+>     prerequisite).
+> *   Anything that is **not** listed here should not be on the
+>     informal roadmap. Surprise features are scope creep.
+
+These are *themes* — not committed features — that frame future
+investment. Specific work items live in HLRs/LLRs as they are
+adopted.
+
+*   **<Theme 1>.** <One-sentence description and gating
+    condition.>
+*   **<Theme 2>.** <…>
+*   **<Theme 3>.** <…>
+*   **<Theme 4>.** <…>
+
+Anything not listed here is not on the roadmap and would require an
+explicit vision update.
+
+## 10. Relationship to the Rest of the Spec Stack
+
+> *Boilerplate — adjust only if you add or remove documents.*
+
+| Document | Question it answers |
+| -------- | ------------------- |
+| **PVD** (this document) | *Why* does this product exist, and how do we know it is succeeding? |
+| [HLRs.md](HLRs.md) | *What* must the product do to deliver on the vision? |
+| [LLRs.md](LLRs.md) | *How* does each function in the implementation contribute to an HLR? |
+| [SDD.md](SDD.md) | *How is the implementation structured* to satisfy the LLRs? |
+| [STP.md](STP.md) | *How do we verify* that each LLR (and therefore each HLR, and therefore the vision) is actually delivered? |
+| [Traceability.md](Traceability.md) | *Where are the gaps*, end-to-end? |
+
+A change to this PVD should propagate downward (some HLRs may be
+added, retired, or reworded). A change discovered during
+implementation that conflicts with this PVD is a signal to update
+this document — not to silently diverge.
